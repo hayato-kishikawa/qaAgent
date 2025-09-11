@@ -561,12 +561,15 @@ class QAApp:
         return followup_pairs
     
     async def _run_parallel_summary_and_qa(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> tuple:
-        """要約とQ&Aセッションを並列実行し、結果を順次表示"""
+        """要約とQ&Aセッションを並列実行し、要約は完了次第すぐに表示"""
         try:
             # 並列実行のプログレス表示
             st.info("⚡ 要約とQ&Aセッションを並列実行中...")
             progress_bar = st.progress(0)
             status_text = st.empty()
+            
+            # 要約表示用のプレースホルダーを作成
+            summary_container = st.empty()
             
             # 要約タスクを作成
             summary_task = self._generate_summary_async(pdf_data['text_content'])
@@ -574,23 +577,36 @@ class QAApp:
             # Q&Aタスクを作成
             qa_task = self._run_parallel_qa_session(pdf_data, processing_settings)
             
-            # 並列実行
+            # 並列実行開始
             status_text.text("🔄 要約とQ&Aを並列処理中...")
-            progress_bar.progress(50)
+            progress_bar.progress(30)
             
-            summary, qa_pairs = await asyncio.gather(summary_task, qa_task)
+            # asyncio.as_completedを使用して、完了したタスクから順次処理
+            pending = {summary_task, qa_task}
+            summary = None
+            qa_pairs = []
             
-            # 結果を順次表示
-            progress_bar.progress(80)
-            status_text.text("📝 結果を表示中...")
+            for task in asyncio.as_completed(pending):
+                result = await task
+                
+                if task == summary_task:
+                    # 要約が完了した場合、すぐに表示
+                    summary = result
+                    if summary:
+                        with summary_container:
+                            st.success("✅ 要約生成完了")
+                            self.components.render_summary_section(summary)
+                        SessionManager.set_summary(summary)
+                        progress_bar.progress(60)
+                        status_text.text("📋 要約表示完了！Q&Aセッション継続中...")
+                
+                elif task == qa_task:
+                    # Q&Aが完了した場合
+                    qa_pairs = result
+                    progress_bar.progress(90)
+                    status_text.text("💬 Q&Aセッション完了！")
             
-            # 1. 要約を表示
-            if summary:
-                st.success("✅ 要約生成完了")
-                SessionManager.set_summary(summary)
-                self.components.render_summary_section(summary)
-            
-            # 2. Q&Aを順次表示
+            # Q&A結果を表示
             if qa_pairs:
                 st.success(f"✅ Q&Aセッション完了 ({len(qa_pairs)}ペア生成)")
                 st.subheader("💬 生成されたQ&A")
