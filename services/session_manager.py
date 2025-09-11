@@ -59,8 +59,8 @@ class SessionManager:
             'teacher_model': 'gpt-5',
             'summarizer_model': 'gpt-5-nano',
             'enable_followup': True,
-            'followup_threshold': 0.6,
-            'max_followups': 3
+            'followup_threshold': 0.3,  # 閾値を下げてフォローアップ頻度UP
+            'max_followups': 5         # 最大数を増やして情報量確保
         })
     
     @staticmethod

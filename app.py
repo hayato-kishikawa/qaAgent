@@ -346,30 +346,40 @@ class QAApp:
         except Exception as e:
             return f"最終レポート生成エラー: {str(e)}"
     
-    def _evaluate_answer_complexity(self, answer: str) -> float:
-        """回答の専門度を評価（0.0-1.0のスコア）"""
-        # 専門用語の密度を評価
-        specialized_terms = [
-            # 学術・技術用語の例
-            "algorithm", "methodology", "hypothesis", "correlation", "statistical",
-            "paradigm", "framework", "implementation", "optimization", "analysis",
-            "研究", "手法", "アルゴリズム", "統計", "解析", "実装", "最適化", "パラメータ"
-        ]
-        
-        words = answer.lower().split()
-        specialized_count = sum(1 for word in words if any(term in word for term in specialized_terms))
-        
-        if not words:
-            return 0.0
-        
-        complexity_score = min(1.0, specialized_count / len(words) * 10)  # 専門用語密度を10倍してスケール調整
-        
-        # 文の長さも考慮（長い文は理解が困難な場合が多い）
-        avg_sentence_length = len(words) / max(1, answer.count('.') + answer.count('。'))
-        if avg_sentence_length > 20:
-            complexity_score += 0.2
-        
-        return min(1.0, complexity_score)
+    async def _evaluate_answer_complexity(self, answer: str) -> float:
+        """OpenAI APIを使って回答の専門度を評価（0.0-1.0のスコア）"""
+        try:
+            evaluation_prompt = f"""
+以下の文章の専門度・複雑さを0.0から1.0の数値で評価してください。
+
+評価基準：
+- 0.0-0.3: 一般の人でも理解しやすい、簡単な説明
+- 0.4-0.6: 多少の専門知識が必要だが理解できる
+- 0.7-1.0: 高度な専門知識や長い説明で理解が困難
+
+評価対象の文章：
+{answer}
+
+数値のみ回答してください（例：0.7）
+"""
+            
+            # 軽量モデルを使用して評価（コスト削減）
+            complexity_response = await self.orchestrator.single_agent_invoke(
+                self.summarizer_agent.get_agent(),  # 要約エージェントを流用
+                evaluation_prompt
+            )
+            
+            # 数値を抽出
+            try:
+                score = float(complexity_response.strip())
+                return max(0.0, min(1.0, score))
+            except ValueError:
+                # パースできない場合はデフォルト値
+                return 0.5
+                
+        except Exception as e:
+            # エラー時はデフォルト値を返す
+            return 0.5
     
     def _run_streaming_qa_session(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
         """ストリーミング形式でQ&Aセッションを実行（フォローアップ質問機能付き）"""
@@ -446,7 +456,7 @@ class QAApp:
                     # フォローアップ質問の実行（設定が有効な場合のみ）
                     followup_pairs = []
                     if enable_followup:
-                        complexity_score = self._evaluate_answer_complexity(answer)
+                        complexity_score = asyncio.run(self._evaluate_answer_complexity(answer))
                         if complexity_score >= followup_threshold:
                             status_text.text(f"フォローアップ質問を生成中 (セクション {i+1})...")
                             followup_pairs = self._handle_followup_questions(
@@ -477,7 +487,7 @@ class QAApp:
         complexity_threshold = threshold
         
         # 初回回答の専門度を評価
-        complexity_score = self._evaluate_answer_complexity(initial_answer)
+        complexity_score = asyncio.run(self._evaluate_answer_complexity(initial_answer))
         
         if complexity_score < complexity_threshold:
             return followup_pairs  # 専門度が低い場合はフォローアップなし
@@ -536,7 +546,7 @@ class QAApp:
                 followup_pairs.append(followup_pair)
                 
                 # 新しい回答の専門度を評価
-                new_complexity = self._evaluate_answer_complexity(followup_answer)
+                new_complexity = asyncio.run(self._evaluate_answer_complexity(followup_answer))
                 
                 # 理解しやすくなった場合は終了
                 if new_complexity < complexity_threshold:
@@ -722,7 +732,7 @@ class QAApp:
             
             # フォローアップ質問（必要な場合）
             if enable_followup:
-                complexity_score = self._evaluate_answer_complexity(answer)
+                complexity_score = await self._evaluate_answer_complexity(answer)
                 if complexity_score >= followup_threshold:
                     followup_pairs = await self._handle_followup_questions_async(
                         section, answer, section_index, previous_qa, followup_threshold, max_followups
@@ -791,7 +801,7 @@ class QAApp:
                 followup_pairs.append(followup_pair)
                 
                 # 複雑度評価
-                new_complexity = self._evaluate_answer_complexity(followup_answer)
+                new_complexity = await self._evaluate_answer_complexity(followup_answer)
                 if new_complexity < threshold:
                     break
                     

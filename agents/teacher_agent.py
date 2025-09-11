@@ -72,15 +72,14 @@ class TeacherAgent(BaseAgent):
                 prompt_parts.append(f"Q{i}: {qa.get('question', '')}")
                 prompt_parts.append(f"A{i}: {qa.get('answer', '')[:150]}...")
         
-        # 回答指示
+        # 回答指示（簡潔バージョン）
         prompt_parts.append("\\n【指示】")
-        prompt_parts.append("上記の質問に対して、参考文書の内容に基づいた正確で詳細な回答を提供してください。")
-        prompt_parts.append("以下の点に注意してください：")
-        prompt_parts.append("1. 文書に記載されている内容を正確に引用・参照する")
-        prompt_parts.append("2. 専門用語は適切に説明し、具体例を交える")
-        prompt_parts.append("3. 文書に明記されていない内容については、その旨を明確にする")
-        prompt_parts.append("4. わかりやすく丁寧な説明を心がける")
-        prompt_parts.append("\\n回答のみを出力してください。")
+        prompt_parts.append("質問に対して、短くて分かりやすい回答をしてください。")
+        prompt_parts.append("ポイント：")
+        prompt_parts.append("1. 2-3行程度の簡潔な回答")
+        prompt_parts.append("2. 専門用語は使わず、普通の言葉で")
+        prompt_parts.append("3. まず結論を述べる")
+        prompt_parts.append("\\n短い回答をお願いします。")
         
         return "\\n\\n".join(prompt_parts)
     

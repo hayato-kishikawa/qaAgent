@@ -169,23 +169,23 @@ class UIComponents:
         if settings['enable_followup']:
             settings['followup_threshold'] = st.slider(
                 "専門度の閾値",
-                min_value=0.3,
+                min_value=0.1,
                 max_value=0.9,
-                value=0.6,
+                value=0.3,  # デフォルトを下げてフォローアップ頻度UP
                 step=0.1,
-                help="この値を超える専門度の回答に対してフォローアップ質問を生成します"
+                help="この値を超える専門度の回答に対してフォローアップ質問を生成します（低いほど多くのフォローアップが生成されます）"
             )
             
             settings['max_followups'] = st.slider(
                 "最大フォローアップ数",
                 min_value=1,
-                max_value=5,
-                value=3,
+                max_value=10,  # 上限を増やす
+                value=5,       # デフォルトを増やす
                 step=1,
                 help="各セクションで生成するフォローアップ質問の最大数"
             )
         else:
-            settings['followup_threshold'] = 0.6
+            settings['followup_threshold'] = 0.3  # 調整後のデフォルト値
             settings['max_followups'] = 0
         
         return settings

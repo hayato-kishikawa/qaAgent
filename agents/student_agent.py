@@ -90,18 +90,15 @@ class StudentAgent(BaseAgent):
         prompt_parts.append("\\n【指示】")
         
         if target_keyword:
-            # 単語指定がある場合の特別な指示
-            prompt_parts.append(f"重要単語「{target_keyword}」に関する質問を生成してください。")
-            prompt_parts.append(f"この単語が文書内でどのような文脈で使われ、どのような意味や重要性を持つかについて、")
-            prompt_parts.append("理解を深めるための具体的な質問を1つだけ生成してください。")
-            prompt_parts.append("過去の質問と重複しないよう注意してください。")
+            # 単語指定がある場合の簡単な指示
+            prompt_parts.append(f"「{target_keyword}」について、普通の言葉で簡単な質問をしてください。")
+            prompt_parts.append("この言葉の意味や使われ方が分からないので、分かりやすく教えてもらいたいです。")
         else:
-            # 通常の質問生成指示
-            prompt_parts.append(f"上記の「現在注目すべきセクション（セクション{self.current_section + 1}）」の内容について、")
-            prompt_parts.append("理解を深めるための質問を1つだけ生成してください。")
-            prompt_parts.append("過去の質問と重複しないよう注意し、そのセクションの重要なポイントに焦点を当ててください。")
+            # 通常の質問生成指示（シンプル化）
+            prompt_parts.append("この内容について、分からないことを1つ聞きたいです。")
+            prompt_parts.append("難しい言葉は使わないで、普通に話すような感じで質問してください。")
         
-        prompt_parts.append("\\n質問のみを出力してください。")
+        prompt_parts.append("\\n短くて分かりやすい質問をお願いします。")
         
         return "\\n\\n".join(prompt_parts)
     
