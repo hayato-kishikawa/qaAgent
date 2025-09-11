@@ -65,3 +65,7 @@ class InitialSummarizerAgent(BaseAgent):
             要約生成プロンプト
         """
         return self._build_initial_summary_prompt(document_content)
+    
+    def get_description(self) -> str:
+        """エージェントの説明を返す"""
+        return "文書の全体像を素早く把握するための初期要約を生成するエージェント"

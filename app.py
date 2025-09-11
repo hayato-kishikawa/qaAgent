@@ -34,6 +34,9 @@ class QAApp:
         self.upload_tab = UploadTab()
         self.processing_tab = ProcessingTab()
         
+        # 初期化エラーフラグ
+        self.initialization_error = None
+        
         # サービスの初期化
         try:
             self.kernel_service = KernelService()
@@ -41,7 +44,7 @@ class QAApp:
             self.chat_manager = ChatManager()
             self.orchestrator = AgentOrchestrator(self.kernel_service)
         except Exception as e:
-            st.error(f"サービスの初期化に失敗しました: {str(e)}")
+            self.initialization_error = f"サービスの初期化に失敗しました: {str(e)}"
             return
         
         # エージェントの初期化
@@ -51,7 +54,7 @@ class QAApp:
             self.initial_summarizer_agent = InitialSummarizerAgent(self.kernel_service)  # 初期要約専用
             self.summarizer_agent = SummarizerAgent(self.kernel_service)  # 最終レポート専用
         except Exception as e:
-            st.error(f"エージェントの初期化に失敗しました: {str(e)}")
+            self.initialization_error = f"エージェントの初期化に失敗しました: {str(e)}"
             return
     
     def run(self):
@@ -62,6 +65,11 @@ class QAApp:
             page_icon=self.settings.PAGE_ICON,
             layout=self.settings.LAYOUT
         )
+        
+        # 初期化エラーチェック
+        if self.initialization_error:
+            st.error(self.initialization_error)
+            st.stop()
         
         # スタイルを適用
         StyleManager.apply_custom_styles()
