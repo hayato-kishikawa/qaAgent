@@ -104,23 +104,26 @@ class UIComponents:
             
             with col_preset1:
                 if st.button("💰 コスト重視", help="全エージェントを超軽量モデル（GPT-5 Nano）に設定"):
-                    settings['student_model'] = 'gpt-5-nano'
-                    settings['teacher_model'] = 'gpt-5-nano'  
-                    settings['summarizer_model'] = 'gpt-5-nano'
+                    # session_stateに保存してselectboxに反映
+                    st.session_state['preset_student_model'] = 'gpt-5-nano'
+                    st.session_state['preset_teacher_model'] = 'gpt-5-nano'  
+                    st.session_state['preset_summarizer_model'] = 'gpt-5-nano'
                     st.rerun()
             
             with col_preset2:
                 if st.button("⚖️ バランス重視", help="最新モデルで最適バランス（推奨）"):
-                    settings['student_model'] = 'gpt-5-mini'
-                    settings['teacher_model'] = 'gpt-5'
-                    settings['summarizer_model'] = 'gpt-5-nano'
+                    # session_stateに保存してselectboxに反映
+                    st.session_state['preset_student_model'] = 'gpt-5-mini'
+                    st.session_state['preset_teacher_model'] = 'gpt-5'
+                    st.session_state['preset_summarizer_model'] = 'gpt-5-nano'
                     st.rerun()
             
             with col_preset3:
                 if st.button("🚀 性能重視", help="全エージェントを最高性能モデル（GPT-5）に設定"):
-                    settings['student_model'] = 'gpt-5'
-                    settings['teacher_model'] = 'gpt-5'
-                    settings['summarizer_model'] = 'gpt-5'
+                    # session_stateに保存してselectboxに反映
+                    st.session_state['preset_student_model'] = 'gpt-5'
+                    st.session_state['preset_teacher_model'] = 'gpt-5'
+                    st.session_state['preset_summarizer_model'] = 'gpt-5'
                     st.rerun()
                     
         else:
@@ -192,6 +195,13 @@ class UIComponents:
     
     def _render_model_selector(self, key: str, model_options: list, default_model: str, help_text: str) -> str:
         """モデル選択セレクトボックスを描画"""
+        # プリセットが設定されている場合はそれを優先
+        preset_key = f"preset_{key}"
+        if preset_key in st.session_state:
+            default_model = st.session_state[preset_key]
+            # プリセット使用後は削除
+            del st.session_state[preset_key]
+        
         # デフォルトモデルのインデックスを取得
         default_index = 0
         for i, (name, model_id) in enumerate(model_options):
