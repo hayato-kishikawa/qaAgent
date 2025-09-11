@@ -551,17 +551,54 @@ class QAApp:
         return followup_pairs
     
     async def _run_parallel_summary_and_qa(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> tuple:
-        """要約とQ&Aセッションを並列実行"""
-        # 要約タスクを作成
-        summary_task = self._generate_summary_async(pdf_data['text_content'])
-        
-        # Q&Aタスクを作成
-        qa_task = self._run_parallel_qa_session(pdf_data, processing_settings)
-        
-        # 並列実行
-        summary, qa_pairs = await asyncio.gather(summary_task, qa_task)
-        
-        return summary, qa_pairs
+        """要約とQ&Aセッションを並列実行し、結果を順次表示"""
+        try:
+            # 並列実行のプログレス表示
+            st.info("⚡ 要約とQ&Aセッションを並列実行中...")
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # 要約タスクを作成
+            summary_task = self._generate_summary_async(pdf_data['text_content'])
+            
+            # Q&Aタスクを作成
+            qa_task = self._run_parallel_qa_session(pdf_data, processing_settings)
+            
+            # 並列実行
+            status_text.text("🔄 要約とQ&Aを並列処理中...")
+            progress_bar.progress(50)
+            
+            summary, qa_pairs = await asyncio.gather(summary_task, qa_task)
+            
+            # 結果を順次表示
+            progress_bar.progress(80)
+            status_text.text("📝 結果を表示中...")
+            
+            # 1. 要約を表示
+            if summary:
+                st.success("✅ 要約生成完了")
+                SessionManager.set_summary(summary)
+                self.components.render_summary_section(summary)
+            
+            # 2. Q&Aを順次表示
+            if qa_pairs:
+                st.success(f"✅ Q&Aセッション完了 ({len(qa_pairs)}ペア生成)")
+                st.subheader("💬 生成されたQ&A")
+                
+                # Q&Aペアを一つずつ表示
+                for i, qa_pair in enumerate(qa_pairs, 1):
+                    with st.expander(f"Q{i}: {qa_pair['question'][:50]}...", expanded=False):
+                        st.markdown(f"**質問：** {qa_pair['question']}")
+                        st.markdown(f"**回答：** {qa_pair['answer']}")
+            
+            progress_bar.progress(100)
+            status_text.text("✅ 並列処理完了！")
+            
+            return summary, qa_pairs
+            
+        except Exception as e:
+            st.error(f"並列処理エラー: {str(e)}")
+            return "", []
     
     async def _generate_summary_async(self, document_content: str) -> str:
         """文書要約を非同期生成"""
@@ -595,6 +632,10 @@ class QAApp:
         enable_followup = processing_settings['enable_followup']
         followup_threshold = processing_settings['followup_threshold']
         max_followups = processing_settings['max_followups']
+        target_keywords = processing_settings.get('target_keywords', [])
+        
+        # 使用済み単語を追跡
+        used_keywords = set()
         
         # 文書をセクションに分割
         sections = self._split_document(pdf_data['text_content'], qa_turns)
@@ -614,8 +655,19 @@ class QAApp:
             # 並列タスクを作成
             for i, section in enumerate(batch_sections):
                 section_index = batch_start + i
+                
+                # 使用する単語を決定（単語登録がある場合は優先）
+                target_keyword = None
+                if target_keywords and len(used_keywords) < len(target_keywords):
+                    # まだ使っていない単語を選択
+                    available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
+                    if available_keywords:
+                        target_keyword = available_keywords[0]
+                        used_keywords.add(target_keyword)
+                
                 task = self._process_section_async(section, section_index, qa_pairs, 
-                                                 enable_followup, followup_threshold, max_followups)
+                                                 enable_followup, followup_threshold, max_followups,
+                                                 target_keyword)
                 batch_tasks.append(task)
             
             # 並列実行
@@ -644,13 +696,14 @@ class QAApp:
         return qa_pairs
     
     async def _process_section_async(self, section: str, section_index: int, previous_qa: list,
-                                   enable_followup: bool, followup_threshold: float, max_followups: int) -> list:
+                                   enable_followup: bool, followup_threshold: float, max_followups: int,
+                                   target_keyword: str = None) -> list:
         """セクション処理の非同期版"""
         section_qa_pairs = []
         
         try:
             # 並列で質問と前のセクションの処理を実行
-            question_task = self._generate_question_async(section, previous_qa)
+            question_task = self._generate_question_async(section, previous_qa, target_keyword)
             
             # 質問生成を待つ
             question = await question_task
@@ -681,13 +734,19 @@ class QAApp:
         
         return section_qa_pairs
     
-    async def _generate_question_async(self, section: str, previous_qa: list) -> str:
+    async def _generate_question_async(self, section: str, previous_qa: list, target_keyword: str = None) -> str:
         """質問を非同期生成"""
-        question_prompt = self.student_agent.process_message("", {
+        context = {
             "current_section_content": section,
             "document_content": self.teacher_agent.document_content,
             "previous_qa": previous_qa
-        })
+        }
+        
+        # 単語指定がある場合はコンテキストに追加
+        if target_keyword:
+            context["target_keyword"] = target_keyword
+        
+        question_prompt = self.student_agent.process_message("", context)
         
         return await self.orchestrator.single_agent_invoke(
             self.student_agent.get_agent(),

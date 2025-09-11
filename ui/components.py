@@ -131,6 +131,33 @@ class UIComponents:
         
         st.divider()
         
+        # 単語登録設定
+        st.markdown("**📝 重要単語登録**")
+        st.caption("指定した単語について必ず質問を生成します（登録単語数 < Q&Aターン数 にしてください）")
+        
+        # 単語入力
+        keyword_input = st.text_input(
+            "重要単語を入力（カンマ区切りで複数入力可能）",
+            placeholder="例: 機械学習, ニューラルネットワーク, 深層学習",
+            help="これらの単語について優先的に質問が生成されます"
+        )
+        
+        # 入力された単語をリストに変換
+        keywords = []
+        if keyword_input.strip():
+            keywords = [kw.strip() for kw in keyword_input.split(',') if kw.strip()]
+        
+        settings['target_keywords'] = keywords
+        
+        # 登録単語数とQ&Aターン数の関係をチェック
+        qa_turns = settings.get('qa_turns', 10)
+        if keywords and len(keywords) >= qa_turns:
+            st.warning(f"⚠️ 登録単語数({len(keywords)})がQ&Aターン数({qa_turns})以上です。単語を減らすかターン数を増やしてください。")
+        elif keywords:
+            st.success(f"✅ {len(keywords)}個の単語を登録: {', '.join(keywords[:3])}{'...' if len(keywords) > 3 else ''}")
+        
+        st.divider()
+        
         # フォローアップ質問設定
         st.markdown("**🔄 フォローアップ質問設定**")
         settings['enable_followup'] = st.checkbox(
@@ -251,7 +278,8 @@ class UIComponents:
             st.markdown(report)
             
             # コピーボタン
-            if st.button("📋 レポートをコピー", key="copy_report"):
+            import uuid
+            if st.button("📋 レポートをコピー", key=f"copy_report_{uuid.uuid4().hex[:8]}"):
                 # JavaScriptを使用してクリップボードにコピー
                 st.components.v1.html(f"""
                     <script>

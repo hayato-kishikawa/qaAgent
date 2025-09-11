@@ -57,15 +57,17 @@ class StudentAgent(BaseAgent):
             previous_qa = []
         
         # 質問生成のためのプロンプトを構築
+        target_keyword = context.get("target_keyword") if context else None
         question_prompt = self._build_question_prompt(
             document_content, 
             current_section_content, 
-            previous_qa
+            previous_qa,
+            target_keyword
         )
         
         return question_prompt
     
-    def _build_question_prompt(self, document_content: str, section_content: str, previous_qa: list) -> str:
+    def _build_question_prompt(self, document_content: str, section_content: str, previous_qa: list, target_keyword: str = None) -> str:
         """質問生成用のプロンプトを構築"""
         prompt_parts = []
         
@@ -86,9 +88,19 @@ class StudentAgent(BaseAgent):
         
         # 質問指示
         prompt_parts.append("\\n【指示】")
-        prompt_parts.append(f"上記の「現在注目すべきセクション（セクション{self.current_section + 1}）」の内容について、")
-        prompt_parts.append("理解を深めるための質問を1つだけ生成してください。")
-        prompt_parts.append("過去の質問と重複しないよう注意し、そのセクションの重要なポイントに焦点を当ててください。")
+        
+        if target_keyword:
+            # 単語指定がある場合の特別な指示
+            prompt_parts.append(f"重要単語「{target_keyword}」に関する質問を生成してください。")
+            prompt_parts.append(f"この単語が文書内でどのような文脈で使われ、どのような意味や重要性を持つかについて、")
+            prompt_parts.append("理解を深めるための具体的な質問を1つだけ生成してください。")
+            prompt_parts.append("過去の質問と重複しないよう注意してください。")
+        else:
+            # 通常の質問生成指示
+            prompt_parts.append(f"上記の「現在注目すべきセクション（セクション{self.current_section + 1}）」の内容について、")
+            prompt_parts.append("理解を深めるための質問を1つだけ生成してください。")
+            prompt_parts.append("過去の質問と重複しないよう注意し、そのセクションの重要なポイントに焦点を当ててください。")
+        
         prompt_parts.append("\\n質問のみを出力してください。")
         
         return "\\n\\n".join(prompt_parts)
