@@ -13,6 +13,7 @@ from services.session_manager import SessionManager
 # エージェントのインポート
 from agents.student_agent import StudentAgent
 from agents.teacher_agent import TeacherAgent
+from agents.initial_summarizer_agent import InitialSummarizerAgent
 from agents.summarizer_agent import SummarizerAgent
 
 # UIコンポーネントのインポート
@@ -47,7 +48,8 @@ class QAApp:
         try:
             self.student_agent = StudentAgent(self.kernel_service)
             self.teacher_agent = TeacherAgent(self.kernel_service)
-            self.summarizer_agent = SummarizerAgent(self.kernel_service)
+            self.initial_summarizer_agent = InitialSummarizerAgent(self.kernel_service)  # 初期要約専用
+            self.summarizer_agent = SummarizerAgent(self.kernel_service)  # 最終レポート専用
         except Exception as e:
             st.error(f"エージェントの初期化に失敗しました: {str(e)}")
             return
@@ -176,26 +178,25 @@ class QAApp:
             # 文書情報を表示
             self.components.render_document_info(pdf_data)
             
+            # ステップ2: 初期要約を即座に生成・表示
+            with st.spinner("📋 文書要約を生成中..."):
+                initial_summary = asyncio.run(self._generate_initial_summary(pdf_data['text_content']))
+                SessionManager.set_summary(initial_summary)
+            
+            st.success("✅ 要約生成完了")
+            self.components.render_summary_section(initial_summary)
+            
             # 並列処理オプション
-            use_parallel = st.checkbox("⚡ 並列処理を有効にする", 
+            use_parallel = st.checkbox("⚡ Q&A並列処理を有効にする", 
                                      value=True, 
-                                     help="要約とQ&Aを並列処理して高速化します（推奨）")
+                                     help="Q&A生成を並列処理して高速化します（推奨）")
             
             if use_parallel:
-                # 要約とQ&Aを並列実行
-                with st.spinner("📋 要約生成とQ&Aセッションを並列実行中..."):
-                    summary, qa_pairs = asyncio.run(self._run_parallel_summary_and_qa(pdf_data, processing_settings))
-                    SessionManager.set_summary(summary)
+                # Q&Aのみを並列実行
+                with st.spinner("💬 Q&Aセッションを並列実行中..."):
+                    qa_pairs = asyncio.run(self._run_parallel_qa_only(pdf_data, processing_settings))
             else:
-                # 従来の順次処理
-                # ステップ2: 要約生成
-                with st.spinner("📋 文書要約を生成中..."):
-                    summary = asyncio.run(self._generate_summary(pdf_data['text_content']))
-                    SessionManager.set_summary(summary)
-                
-                st.success("✅ 要約生成完了")
-                self.components.render_summary_section(summary)
-                
+                # 従来のQ&A順次処理
                 # ステップ3: Q&Aセッション
                 st.subheader("💬 Q&Aセッション")
                 qa_pairs = self._run_streaming_qa_session(pdf_data, processing_settings)
@@ -700,6 +701,95 @@ class QAApp:
             
             return "", []
     
+    async def _generate_initial_summary(self, document_content: str) -> str:
+        """初期要約を生成（新しいエージェント使用）"""
+        try:
+            prompt = self.initial_summarizer_agent.create_document_summary(document_content)
+            initial_summary = await self.orchestrator.single_agent_invoke(
+                self.initial_summarizer_agent.get_agent(),
+                prompt
+            )
+            return initial_summary
+        except Exception as e:
+            return f"初期要約生成エラー: {str(e)}"
+    
+    async def _run_parallel_qa_only(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
+        """Q&Aセッションのみを並列実行"""
+        try:
+            # 設定を取得
+            qa_turns = processing_settings['qa_turns']
+            enable_followup = processing_settings['enable_followup']
+            followup_threshold = processing_settings['followup_threshold']
+            max_followups = processing_settings['max_followups']
+            target_keywords = processing_settings.get('target_keywords', [])
+            
+            # 使用済み単語を追跡
+            used_keywords = set()
+            
+            # 文書をセクションに分割
+            sections = self._split_document(pdf_data['text_content'], qa_turns)
+            self.student_agent.set_document_sections(sections)
+            self.teacher_agent.set_document_content(pdf_data['text_content'])
+            
+            # プログレスバーを作成
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            qa_pairs = []
+            
+            # セクションを並列処理用にバッチ分け（3セクションずつ）
+            batch_size = 3
+            for batch_start in range(0, len(sections), batch_size):
+                batch_sections = sections[batch_start:batch_start + batch_size]
+                batch_tasks = []
+                
+                # 並列タスクを作成
+                for i, section in enumerate(batch_sections):
+                    section_index = batch_start + i
+                    
+                    # 使用する単語を決定（単語登録がある場合は優先）
+                    target_keyword = None
+                    if target_keywords and len(used_keywords) < len(target_keywords):
+                        # まだ使っていない単語を選択
+                        available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
+                        if available_keywords:
+                            target_keyword = available_keywords[0]
+                            used_keywords.add(target_keyword)
+                    
+                    task = self._process_section_async(section, section_index, qa_pairs, 
+                                                     enable_followup, followup_threshold, max_followups,
+                                                     target_keyword)
+                    batch_tasks.append(task)
+                
+                # 並列実行
+                status_text.text(f"セクション {batch_start+1}-{min(batch_start+batch_size, len(sections))} を並列処理中...")
+                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+                
+                # 結果を処理
+                for result in batch_results:
+                    if isinstance(result, Exception):
+                        st.error(f"並列処理エラー: {str(result)}")
+                    else:
+                        qa_pairs.extend(result)
+                        
+                        # StreamlitのセッションにQ&Aペアを追加
+                        for qa_pair in result:
+                            SessionManager.add_qa_pair(qa_pair['question'], qa_pair['answer'])
+                
+                # 進捗更新
+                progress = min(1.0, (batch_start + batch_size) / len(sections))
+                progress_bar.progress(progress)
+            
+            # 完了
+            progress_bar.progress(1.0)
+            status_text.text("Q&Aセッション完了！")
+            
+            return qa_pairs
+            
+        except Exception as e:
+            st.error(f"Q&A並列処理エラー: {str(e)}")
+            return []
+    
     async def _generate_summary_async(self, document_content: str) -> str:
         """文書要約を非同期生成"""
         try:
@@ -720,7 +810,10 @@ class QAApp:
         # 教師エージェントのモデル設定  
         self.teacher_agent.set_model(processing_settings['teacher_model'])
         
-        # 要約エージェントのモデル設定
+        # 初期要約エージェントのモデル設定
+        self.initial_summarizer_agent.set_model(processing_settings['summarizer_model'])
+        
+        # 最終レポート要約エージェントのモデル設定
         self.summarizer_agent.set_model(processing_settings['summarizer_model'])
     
     async def _run_parallel_qa_session(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
