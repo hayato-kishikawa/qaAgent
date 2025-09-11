@@ -340,6 +340,49 @@ class UIComponents:
     def render_info_message(message: str):
         """情報メッセージを表示"""
         st.info(f"ℹ️ {message}")
+    
+    @staticmethod
+    def render_skeleton_summary():
+        """要約セクションのスケルトンローディング"""
+        st.subheader("📋 文書要約")
+        with st.container():
+            # テキストのスケルトン表示
+            st.markdown("""
+            <div style='background: linear-gradient(90deg, #f0f2f6 25%, #e6e6e6 37%, #f0f2f6 63%); 
+                        background-size: 400% 100%; animation: shimmer 1.5s ease-in-out infinite;
+                        height: 20px; border-radius: 4px; margin: 8px 0;'></div>
+            <div style='background: linear-gradient(90deg, #f0f2f6 25%, #e6e6e6 37%, #f0f2f6 63%); 
+                        background-size: 400% 100%; animation: shimmer 1.5s ease-in-out infinite;
+                        height: 20px; border-radius: 4px; margin: 8px 0; width: 85%;'></div>
+            <div style='background: linear-gradient(90deg, #f0f2f6 25%, #e6e6e6 37%, #f0f2f6 63%); 
+                        background-size: 400% 100%; animation: shimmer 1.5s ease-in-out infinite;
+                        height: 20px; border-radius: 4px; margin: 8px 0; width: 92%;'></div>
+            <style>
+            @keyframes shimmer {
+              0% { background-position: -200% 0; }
+              100% { background-position: 200% 0; }
+            }
+            </style>
+            """, unsafe_allow_html=True)
+        st.divider()
+    
+    @staticmethod
+    def render_skeleton_qa():
+        """Q&Aセクションのスケルトンローディング"""
+        st.subheader("💬 Q&Aセッション")
+        for i in range(3):  # 3つのスケルトンQ&Aを表示
+            with st.expander(f"❓ Q{i+1}: 質問を生成中...", expanded=False):
+                st.markdown("""
+                <div style='background: linear-gradient(90deg, #f0f2f6 25%, #e6e6e6 37%, #f0f2f6 63%); 
+                            background-size: 400% 100%; animation: shimmer 1.5s ease-in-out infinite;
+                            height: 16px; border-radius: 4px; margin: 4px 0; width: 70%;'></div>
+                <div style='background: linear-gradient(90deg, #f0f2f6 25%, #e6e6e6 37%, #f0f2f6 63%); 
+                            background-size: 400% 100%; animation: shimmer 1.5s ease-in-out infinite;
+                            height: 16px; border-radius: 4px; margin: 8px 0;'></div>
+                <div style='background: linear-gradient(90deg, #f0f2f6 25%, #e6e6e6 37%, #f0f2f6 63%); 
+                            background-size: 400% 100%; animation: shimmer 1.5s ease-in-out infinite;
+                            height: 16px; border-radius: 4px; margin: 4px 0; width: 88%;'></div>
+                """, unsafe_allow_html=True)
 
 class StreamingDisplay:
     """ストリーミング表示用のクラス"""

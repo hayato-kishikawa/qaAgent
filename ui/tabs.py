@@ -122,6 +122,11 @@ class UploadTab:
             with col1:
                 start_button = st.button("🚀 実行開始", type="primary", use_container_width=True)
                 result['start_processing'] = start_button
+                
+                # 即時フィードバック（100ms以内）
+                if start_button:
+                    st.success("🔄 処理を開始しています...")
+                    st.rerun()
             
             with col2:
                 if st.button("🔄 リセット", use_container_width=True):

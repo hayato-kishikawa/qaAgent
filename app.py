@@ -563,13 +563,40 @@ class QAApp:
     async def _run_parallel_summary_and_qa(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> tuple:
         """要約とQ&Aセッションを並列実行し、要約は完了次第すぐに表示"""
         try:
-            # 並列実行のプログレス表示
+            # 即時フィードバック（100ms以内）
+            st.success("🚀 処理開始 - 文書を解析しています...")
+            
+            # 詳細な進捗表示
             st.info("⚡ 要約とQ&Aセッションを並列実行中...")
             progress_bar = st.progress(0)
             status_text = st.empty()
+            step_text = st.empty()
+            
+            # プロセス透明性 - 実行予定を明示
+            with st.expander("📋 実行プロセス", expanded=False):
+                st.markdown("""
+                **実行予定:**
+                1. 📄 PDF文書をセクション分割
+                2. 📋 要約生成（並列実行）
+                3. 💬 Q&A生成（並列実行）
+                4. 📊 最終レポート作成
+                
+                **推定時間:** 2-5分（文書の長さにより変動）
+                """)
+            
+            # スケルトンローディングを表示
+            skeleton_container = st.empty()
+            with skeleton_container:
+                self.components.render_skeleton_summary()
+                self.components.render_skeleton_qa()
             
             # 要約表示用のプレースホルダーを作成
             summary_container = st.empty()
+            
+            # タスク作成と進捗更新
+            status_text.text("🔄 ステップ1/4: 文書分析と並列タスク準備中...")
+            step_text.text("📄 PDFセクション分割完了")
+            progress_bar.progress(10)
             
             # 要約タスクを作成
             summary_task = self._generate_summary_async(pdf_data['text_content'])
@@ -578,7 +605,8 @@ class QAApp:
             qa_task = self._run_parallel_qa_session(pdf_data, processing_settings)
             
             # 並列実行開始
-            status_text.text("🔄 要約とQ&Aを並列処理中...")
+            status_text.text("🔄 ステップ2-3/4: 要約とQ&Aを並列処理中...")
+            step_text.text("⚡ 2つのAIエージェントが同時作業中...")
             progress_bar.progress(30)
             
             # asyncio.as_completedを使用して、完了したタスクから順次処理
@@ -593,18 +621,22 @@ class QAApp:
                     # 要約が完了した場合、すぐに表示
                     summary = result
                     if summary:
+                        # スケルトンを消去して実際の内容を表示
+                        skeleton_container.empty()
                         with summary_container:
-                            st.success("✅ 要約生成完了")
+                            st.success("✅ ステップ2/4: 要約生成完了")
                             self.components.render_summary_section(summary)
                         SessionManager.set_summary(summary)
                         progress_bar.progress(60)
                         status_text.text("📋 要約表示完了！Q&Aセッション継続中...")
+                        step_text.text("📝 文書要約が利用可能になりました")
                 
                 elif task == qa_task:
                     # Q&Aが完了した場合
                     qa_pairs = result
                     progress_bar.progress(90)
-                    status_text.text("💬 Q&Aセッション完了！")
+                    status_text.text("💬 ステップ3/4: Q&Aセッション完了！")
+                    step_text.text(f"✅ {len(qa_pairs)}個のQ&Aペアを生成しました")
             
             # Q&A結果を表示
             if qa_pairs:
@@ -617,13 +649,55 @@ class QAApp:
                         st.markdown(f"**質問：** {qa_pair['question']}")
                         st.markdown(f"**回答：** {qa_pair['answer']}")
             
+            # 最終ステップ
             progress_bar.progress(100)
-            status_text.text("✅ 並列処理完了！")
+            status_text.text("🎉 ステップ4/4: 全ての処理が完了しました！")
+            step_text.text("📊 最終レポート準備完了 - タブで確認できます")
+            
+            # 完了サマリー
+            st.balloons()  # 完了のお祝いアニメーション
+            st.success(f"✅ 処理完了！要約 + {len(qa_pairs) if qa_pairs else 0}個のQ&A + 最終レポートが準備できました")
             
             return summary, qa_pairs
             
+        except asyncio.TimeoutError:
+            st.error("⏱️ タイムアウトエラー: 処理に時間がかかりすぎました")
+            st.markdown("""
+            **対処方法:**
+            - 文書が大きすぎる可能性があります（50MB以下を推奨）
+            - Q&Aターン数を減らしてみてください
+            - しばらく時間をおいて再度お試しください
+            """)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 再試行", type="primary"):
+                    st.rerun()
+            with col2:
+                if st.button("⚙️ 設定を変更"):
+                    st.session_state.current_step = "upload"
+                    st.rerun()
+            
+            return "", []
+            
         except Exception as e:
-            st.error(f"並列処理エラー: {str(e)}")
+            st.error(f"❌ 処理エラーが発生しました: {str(e)}")
+            st.markdown("""
+            **一般的な解決方法:**
+            - OpenAI APIキーが正しく設定されているか確認
+            - インターネット接続を確認
+            - ファイルが破損していないか確認
+            """)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 再試行", type="primary", key="retry_general"):
+                    st.rerun()
+            with col2:
+                if st.button("⚙️ 設定を変更", key="reset_general"):
+                    st.session_state.current_step = "upload"
+                    st.rerun()
+            
             return "", []
     
     async def _generate_summary_async(self, document_content: str) -> str:
