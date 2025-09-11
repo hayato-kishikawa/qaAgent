@@ -108,8 +108,12 @@ class UploadTab:
             st.success(f"✅ ファイルがアップロードされました: {uploaded_file.name}")
             
             # Q&A設定
-            qa_turns = self.components.render_qa_settings()
-            result['qa_turns'] = qa_turns
+            qa_settings = self.components.render_qa_settings()
+            result['qa_turns'] = qa_settings['qa_turns']
+            result['model_id'] = qa_settings['model_id']
+            result['enable_followup'] = qa_settings['enable_followup']
+            result['followup_threshold'] = qa_settings['followup_threshold']
+            result['max_followups'] = qa_settings['max_followups']
             
             # 実行ボタン
             col1, col2 = st.columns([1, 3])

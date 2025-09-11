@@ -66,9 +66,36 @@ class KernelService:
         """Kernelインスタンスを取得"""
         return self.kernel
     
-    def get_execution_settings(self) -> OpenAIChatPromptExecutionSettings:
+    def get_execution_settings(self, model_id: str = None) -> OpenAIChatPromptExecutionSettings:
         """実行設定を取得"""
+        if model_id:
+            # 指定されたモデルで設定を作成
+            return OpenAIChatPromptExecutionSettings(
+                temperature=0.7,
+                max_tokens=2000
+            )
         return self.execution_settings
+    
+    def update_model(self, model_id: str):
+        """使用するモデルを更新"""
+        try:
+            # 新しいChatGPTサービスを作成
+            new_chat_service = OpenAIChatCompletion(
+                service_id="openai-chat",
+                ai_model_id=model_id,
+                api_key=self.settings.OPENAI_API_KEY
+            )
+            
+            # 既存のサービスを削除して新しいサービスを追加
+            self.kernel.remove_service("openai-chat")
+            self.kernel.add_service(new_chat_service)
+            self.chat_service = new_chat_service
+            
+        except Exception as e:
+            import streamlit as st
+            st.error(f"モデルの更新に失敗しました: {str(e)}")
+            # フォールバック: デフォルトモデルに戻す
+            self._initialize_kernel()
 
 class QASessionManager:
     """Q&Aセッションの管理を行うクラス"""
@@ -143,7 +170,10 @@ class AgentOrchestrator:
         callback=None
     ) -> str:
         """
-        Q&Aセッションを実行
+        Q&Aセッションを実行（現在未使用 - フォローアップ質問機能のため単発呼び出しに変更済み）
+        
+        注意: RoundRobinGroupChatManagerは固定順序でエージェントが発言するため、
+        動的なフォローアップ質問には適さない。現在は single_agent_invoke を使用。
         
         Args:
             agents: 参加エージェントのリスト
@@ -158,6 +188,7 @@ class AgentOrchestrator:
         
         try:
             # グループチャットオーケストレーション
+            # 注意: フォローアップ質問の動的制御のため現在は使用していない
             orchestration = GroupChatOrchestration(
                 members=agents,
                 manager=RoundRobinGroupChatManager(max_rounds=max_rounds),

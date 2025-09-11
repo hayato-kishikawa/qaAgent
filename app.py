@@ -85,6 +85,14 @@ class QAApp:
                 self._render_processing_step()
             elif current_step == "qa" or current_step == "completed":
                 self._render_results_step()
+            
+            # タブを常に表示（データがある場合）
+            if (current_step != "completed" and 
+                (SessionManager.get_summary() or SessionManager.get_qa_pairs() or SessionManager.get_final_report())):
+                st.divider()
+                st.subheader("📊 処理結果")
+                self._render_results_step()
+                
         except Exception as e:
             st.error(f"アプリケーションエラー: {str(e)}")
             st.code(traceback.format_exc())
@@ -101,8 +109,17 @@ class QAApp:
                 st.error(validation_result['error_message'])
                 return
             
+            # 処理設定を収集
+            processing_settings = {
+                'qa_turns': upload_result['qa_turns'],
+                'model_id': upload_result['model_id'],
+                'enable_followup': upload_result['enable_followup'],
+                'followup_threshold': upload_result['followup_threshold'],
+                'max_followups': upload_result['max_followups']
+            }
+            
             # 処理を開始
-            self._start_processing(upload_result['uploaded_file'], upload_result['qa_turns'])
+            self._start_processing(upload_result['uploaded_file'], processing_settings)
     
     def _render_processing_step(self):
         """処理中ステップを描画"""
@@ -124,22 +141,57 @@ class QAApp:
         
         self.tab_manager.render_main_tabs(session_data)
     
-    def _start_processing(self, uploaded_file, qa_turns: int):
+    def _start_processing(self, uploaded_file, processing_settings: Dict[str, Any]):
         """PDFの処理を開始"""
         SessionManager.start_processing()
-        SessionManager.set_qa_turns(qa_turns)
-        SessionManager.set_progress("PDFファイルを処理中...", True)
+        SessionManager.set_qa_turns(processing_settings['qa_turns'])
+        
+        # 処理設定をセッションに保存
+        SessionManager.set_processing_settings(processing_settings)
+        
+        # 使用モデルを更新
+        try:
+            self.kernel_service.update_model(processing_settings['model_id'])
+            st.info(f"🤖 使用モデル: {processing_settings['model_id']}")
+        except Exception as e:
+            st.warning(f"モデル設定警告: {str(e)}")
         
         try:
-            # PDFを処理
-            pdf_data = self.pdf_processor.process_pdf(uploaded_file)
-            SessionManager.set_document_data(pdf_data)
+            # ステップ1: PDFを処理
+            with st.spinner("📄 PDFファイルを処理中..."):
+                pdf_data = self.pdf_processor.process_pdf(uploaded_file)
+                SessionManager.set_document_data(pdf_data)
+            
+            st.success("✅ PDF処理完了")
             
             # 文書情報を表示
             self.components.render_document_info(pdf_data)
             
-            # 非同期でQ&Aセッションを開始
-            asyncio.run(self._run_qa_session(pdf_data, qa_turns))
+            # ステップ2: 要約生成
+            with st.spinner("📋 文書要約を生成中..."):
+                summary = asyncio.run(self._generate_summary(pdf_data['text_content']))
+                SessionManager.set_summary(summary)
+            
+            st.success("✅ 要約生成完了")
+            self.components.render_summary_section(summary)
+            
+            # ステップ3: Q&Aセッションをストリーミング実行
+            st.subheader("💬 Q&Aセッション")
+            qa_pairs = self._run_streaming_qa_session(pdf_data, processing_settings)
+            
+            # ステップ4: 最終レポート生成
+            with st.spinner("📊 最終レポートを作成中..."):
+                final_report = asyncio.run(self._generate_final_report(pdf_data['text_content'], qa_pairs, summary))
+                SessionManager.set_final_report(final_report)
+            
+            st.success("✅ 処理完了！下のタブで結果をご確認ください")
+            SessionManager.stop_processing()
+            SessionManager.set_step("completed")
+            
+            # 完了後にタブを表示
+            st.divider()
+            st.subheader("📊 処理結果")
+            self._render_results_step()
             
         except Exception as e:
             st.error(f"処理エラー: {str(e)}")
@@ -267,6 +319,210 @@ class QAApp:
             return final_report
         except Exception as e:
             return f"最終レポート生成エラー: {str(e)}"
+    
+    def _evaluate_answer_complexity(self, answer: str) -> float:
+        """回答の専門度を評価（0.0-1.0のスコア）"""
+        # 専門用語の密度を評価
+        specialized_terms = [
+            # 学術・技術用語の例
+            "algorithm", "methodology", "hypothesis", "correlation", "statistical",
+            "paradigm", "framework", "implementation", "optimization", "analysis",
+            "研究", "手法", "アルゴリズム", "統計", "解析", "実装", "最適化", "パラメータ"
+        ]
+        
+        words = answer.lower().split()
+        specialized_count = sum(1 for word in words if any(term in word for term in specialized_terms))
+        
+        if not words:
+            return 0.0
+        
+        complexity_score = min(1.0, specialized_count / len(words) * 10)  # 専門用語密度を10倍してスケール調整
+        
+        # 文の長さも考慮（長い文は理解が困難な場合が多い）
+        avg_sentence_length = len(words) / max(1, answer.count('.') + answer.count('。'))
+        if avg_sentence_length > 20:
+            complexity_score += 0.2
+        
+        return min(1.0, complexity_score)
+    
+    def _run_streaming_qa_session(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
+        """ストリーミング形式でQ&Aセッションを実行（フォローアップ質問機能付き）"""
+        qa_pairs = []
+        
+        # 設定を取得
+        qa_turns = processing_settings['qa_turns']
+        enable_followup = processing_settings['enable_followup']
+        followup_threshold = processing_settings['followup_threshold']
+        max_followups = processing_settings['max_followups']
+        
+        # 文書をセクションに分割
+        sections = self._split_document(pdf_data['text_content'], qa_turns)
+        self.student_agent.set_document_sections(sections)
+        self.teacher_agent.set_document_content(pdf_data['text_content'])
+        
+        # プログレスバーを作成
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for i, section in enumerate(sections):
+            try:
+                # 進捗更新（メインQ&Aのみ）
+                main_progress = (i + 1) / len(sections)
+                progress_bar.progress(main_progress)
+                status_text.text(f"メインQ&A {i+1}/{len(sections)} を生成中...")
+                
+                # Q&Aペア表示用のコンテナ
+                qa_container = st.container()
+                
+                with qa_container:
+                    # メイン質問生成
+                    with st.spinner(f"❓ 質問 {i+1} を生成中..."):
+                        question_prompt = self.student_agent.process_message("", {
+                            "current_section_content": section,
+                            "document_content": self.teacher_agent.document_content,
+                            "previous_qa": qa_pairs
+                        })
+                        
+                        question = asyncio.run(self.orchestrator.single_agent_invoke(
+                            self.student_agent.get_agent(),
+                            question_prompt
+                        ))
+                    
+                    # メイン質問表示
+                    st.markdown(f"**❓ Q{i+1}:** {question}")
+                    
+                    # メイン回答生成
+                    with st.spinner(f"💡 回答 {i+1} を生成中..."):
+                        answer_prompt = self.teacher_agent.process_message(question, {
+                            "current_section_content": section,
+                            "document_content": self.teacher_agent.document_content,
+                            "previous_qa": qa_pairs
+                        })
+                        
+                        answer = asyncio.run(self.orchestrator.single_agent_invoke(
+                            self.teacher_agent.get_agent(),
+                            answer_prompt
+                        ))
+                    
+                    # メイン回答表示
+                    st.markdown(f"**💡 A{i+1}:** {answer}")
+                    
+                    # メインQ&Aペアを保存
+                    main_qa_pair = {
+                        "question": question,
+                        "answer": answer,
+                        "section": i,
+                        "type": "main"
+                    }
+                    qa_pairs.append(main_qa_pair)
+                    SessionManager.add_qa_pair(question, answer)
+                    
+                    # フォローアップ質問の実行（設定が有効な場合のみ）
+                    followup_pairs = []
+                    if enable_followup:
+                        complexity_score = self._evaluate_answer_complexity(answer)
+                        if complexity_score >= followup_threshold:
+                            status_text.text(f"フォローアップ質問を生成中 (セクション {i+1})...")
+                            followup_pairs = self._handle_followup_questions(
+                                section, answer, i, qa_pairs, followup_threshold, max_followups
+                            )
+                    
+                    # フォローアップQ&Aを表示・保存
+                    for j, followup_pair in enumerate(followup_pairs, 1):
+                        st.markdown(f"**❓ Q{i+1}-{j} (フォローアップ):** {followup_pair['question']}")
+                        st.markdown(f"**💡 A{i+1}-{j}:** {followup_pair['answer']}")
+                        qa_pairs.append(followup_pair)
+                        SessionManager.add_qa_pair(followup_pair['question'], followup_pair['answer'])
+                    
+                    st.divider()
+                
+            except Exception as e:
+                st.error(f"Q&A生成エラー (セクション{i+1}): {str(e)}")
+        
+        # 完了
+        progress_bar.progress(1.0)
+        status_text.text("Q&Aセッション完了！")
+        
+        return qa_pairs
+    
+    def _handle_followup_questions(self, section: str, initial_answer: str, section_index: int, qa_pairs: list, threshold: float = 0.6, max_followups: int = 3) -> list:
+        """フォローアップ質問を処理"""
+        followup_pairs = []
+        complexity_threshold = threshold
+        
+        # 初回回答の専門度を評価
+        complexity_score = self._evaluate_answer_complexity(initial_answer)
+        
+        if complexity_score < complexity_threshold:
+            return followup_pairs  # 専門度が低い場合はフォローアップなし
+        
+        current_answer = initial_answer
+        
+        for followup_count in range(max_followups):
+            try:
+                # フォローアップ質問生成
+                followup_question_prompt = f"""
+あなたは好奇心旺盛な学習者です。先生の回答が専門的で理解が難しいため、より簡単に説明してもらいたいと思っています。
+
+先生の回答: {current_answer}
+
+以下の観点でフォローアップ質問を1つ生成してください：
+- 専門用語の意味を問う
+- 具体例を求める
+- より簡単な説明を求める
+- 関連する基本概念の説明を求める
+
+質問は自然で学習者らしい表現にしてください。
+"""
+                
+                followup_question = asyncio.run(self.orchestrator.single_agent_invoke(
+                    self.student_agent.get_agent(),
+                    followup_question_prompt
+                ))
+                
+                # フォローアップ回答生成
+                followup_answer_prompt = f"""
+学習者からフォローアップ質問を受けました。より理解しやすく、親しみやすい説明をしてください。
+
+質問: {followup_question}
+文書セクション: {section}
+
+以下を心がけて回答してください：
+- 専門用語は平易な言葉で説明
+- 具体例や比喩を使用
+- 段階的で理解しやすい構成
+- 学習者の知識レベルに合わせた説明
+"""
+                
+                followup_answer = asyncio.run(self.orchestrator.single_agent_invoke(
+                    self.teacher_agent.get_agent(),
+                    followup_answer_prompt
+                ))
+                
+                # フォローアップペアを保存
+                followup_pair = {
+                    "question": followup_question,
+                    "answer": followup_answer,
+                    "section": section_index,
+                    "type": "followup",
+                    "followup_count": followup_count + 1
+                }
+                followup_pairs.append(followup_pair)
+                
+                # 新しい回答の専門度を評価
+                new_complexity = self._evaluate_answer_complexity(followup_answer)
+                
+                # 理解しやすくなった場合は終了
+                if new_complexity < complexity_threshold:
+                    break
+                
+                current_answer = followup_answer
+                
+            except Exception as e:
+                st.warning(f"フォローアップ質問 {followup_count + 1} の生成に失敗: {str(e)}")
+                break
+        
+        return followup_pairs
 
 def main():
     """メイン実行関数"""

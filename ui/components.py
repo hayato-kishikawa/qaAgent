@@ -28,19 +28,91 @@ class UIComponents:
         return uploaded_file
     
     @staticmethod
-    def render_qa_settings() -> int:
+    def render_qa_settings() -> Dict[str, Any]:
         """Q&A設定を描画"""
+        from services.openai_service import OpenAIService
+        
         st.subheader("⚙️ Q&A設定")
         
-        qa_turns = st.slider(
+        settings = {}
+        
+        # Q&Aターン数設定
+        settings['qa_turns'] = st.slider(
             "Q&Aターン数",
             min_value=5,
             max_value=20,
             value=10,
+            step=1,
             help="生成するQ&Aペアの数を設定してください"
         )
         
-        return qa_turns
+        # モデル選択
+        st.markdown("**🤖 使用モデル**")
+        openai_service = OpenAIService()
+        available_models = openai_service.get_available_models()
+        
+        if available_models:
+            model_options = [(model['name'], model['id']) for model in available_models]
+            default_model = openai_service.get_default_model()
+            
+            # デフォルトモデルのインデックスを取得
+            default_index = 0
+            for i, (name, model_id) in enumerate(model_options):
+                if model_id == default_model:
+                    default_index = i
+                    break
+            
+            selected_model_name = st.selectbox(
+                "モデルを選択",
+                options=[name for name, _ in model_options],
+                index=default_index,
+                help="使用するAIモデルを選択してください。o1モデルは推論に特化しており、GPT-4oは最新の高性能モデルです。"
+            )
+            
+            # 選択されたモデルのIDを取得
+            settings['model_id'] = next(model_id for name, model_id in model_options if name == selected_model_name)
+            
+            # モデル情報を表示
+            selected_model_info = next(model for model in available_models if model['id'] == settings['model_id'])
+            st.caption(f"選択中: {settings['model_id']}")
+            
+        else:
+            st.error("利用可能なモデルが取得できませんでした。APIキーを確認してください。")
+            settings['model_id'] = 'gpt-4o-mini'
+        
+        st.divider()
+        
+        # フォローアップ質問設定
+        st.markdown("**🔄 フォローアップ質問設定**")
+        settings['enable_followup'] = st.checkbox(
+            "フォローアップ質問を有効にする",
+            value=True,
+            help="回答が専門的すぎる場合に、より理解しやすい説明を求める追加質問を自動生成します"
+        )
+        
+        if settings['enable_followup']:
+            settings['followup_threshold'] = st.slider(
+                "専門度の閾値",
+                min_value=0.3,
+                max_value=0.9,
+                value=0.6,
+                step=0.1,
+                help="この値を超える専門度の回答に対してフォローアップ質問を生成します"
+            )
+            
+            settings['max_followups'] = st.slider(
+                "最大フォローアップ数",
+                min_value=1,
+                max_value=5,
+                value=3,
+                step=1,
+                help="各セクションで生成するフォローアップ質問の最大数"
+            )
+        else:
+            settings['followup_threshold'] = 0.6
+            settings['max_followups'] = 0
+        
+        return settings
     
     @staticmethod
     def render_document_info(doc_data: Dict[str, Any]):

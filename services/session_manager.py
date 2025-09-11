@@ -46,6 +46,22 @@ class SessionManager:
         st.session_state.qa_turns = turns
     
     @staticmethod
+    def set_processing_settings(settings: Dict[str, Any]):
+        """処理設定を保存"""
+        st.session_state.processing_settings = settings
+    
+    @staticmethod
+    def get_processing_settings() -> Dict[str, Any]:
+        """処理設定を取得"""
+        return st.session_state.get('processing_settings', {
+            'qa_turns': 10,
+            'model_id': 'gpt-4o-mini',
+            'enable_followup': True,
+            'followup_threshold': 0.6,
+            'max_followups': 3
+        })
+    
+    @staticmethod
     def get_qa_turns() -> int:
         """Q&Aターン数を取得"""
         return st.session_state.get('qa_turns', 10)
