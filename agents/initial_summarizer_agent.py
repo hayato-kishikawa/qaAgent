@@ -7,8 +7,8 @@ class InitialSummarizerAgent(BaseAgent):
     文書の全体像を素早く把握するための要約を生成
     """
     
-    def __init__(self):
-        super().__init__("initial_summarizer")
+    def __init__(self, kernel_service):
+        super().__init__("initial_summarizer", kernel_service)
         self.document_content = ""
     
     def set_document_content(self, content: str):
