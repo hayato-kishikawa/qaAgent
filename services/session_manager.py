@@ -55,7 +55,9 @@ class SessionManager:
         """処理設定を取得"""
         return st.session_state.get('processing_settings', {
             'qa_turns': 10,
-            'model_id': 'gpt-4o-mini',
+            'student_model': 'gpt-5-mini',
+            'teacher_model': 'gpt-5',
+            'summarizer_model': 'gpt-5-nano',
             'enable_followup': True,
             'followup_threshold': 0.6,
             'max_followups': 3

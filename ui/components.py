@@ -27,8 +27,7 @@ class UIComponents:
         
         return uploaded_file
     
-    @staticmethod
-    def render_qa_settings() -> Dict[str, Any]:
+    def render_qa_settings(self) -> Dict[str, Any]:
         """Q&A設定を描画"""
         from services.openai_service import OpenAIService
         
@@ -46,8 +45,8 @@ class UIComponents:
             help="生成するQ&Aペアの数を設定してください"
         )
         
-        # モデル選択
-        st.markdown("**🤖 使用モデル**")
+        # エージェント別モデル選択
+        st.markdown("**🤖 エージェント別モデル設定**")
         openai_service = OpenAIService()
         available_models = openai_service.get_available_models()
         
@@ -55,30 +54,80 @@ class UIComponents:
             model_options = [(model['name'], model['id']) for model in available_models]
             default_model = openai_service.get_default_model()
             
-            # デフォルトモデルのインデックスを取得
-            default_index = 0
-            for i, (name, model_id) in enumerate(model_options):
-                if model_id == default_model:
-                    default_index = i
-                    break
+            # 推奨モデル設定（GPT-5系を優先）
+            recommended_models = {
+                'student': 'gpt-5-mini',       # 最新軽量モデル
+                'teacher': 'gpt-5',            # 最新最高性能モデル
+                'summarizer': 'gpt-5-nano'     # 最新超軽量モデル
+            }
             
-            selected_model_name = st.selectbox(
-                "モデルを選択",
-                options=[name for name, _ in model_options],
-                index=default_index,
-                help="使用するAIモデルを選択してください。o1モデルは推論に特化しており、GPT-4oは最新の高性能モデルです。"
-            )
+            # 3つのカラムに分けて表示
+            col1, col2, col3 = st.columns(3)
             
-            # 選択されたモデルのIDを取得
-            settings['model_id'] = next(model_id for name, model_id in model_options if name == selected_model_name)
+            with col1:
+                st.markdown("**🎓 学生エージェント**")
+                st.caption("質問生成担当")
+                student_model = self._render_model_selector(
+                    "student_model",
+                    model_options,
+                    recommended_models['student'],
+                    "質問生成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
+                )
+                settings['student_model'] = student_model
             
-            # モデル情報を表示
-            selected_model_info = next(model for model in available_models if model['id'] == settings['model_id'])
-            st.caption(f"選択中: {settings['model_id']}")
+            with col2:
+                st.markdown("**👨‍🏫 教師エージェント**")  
+                st.caption("回答生成担当")
+                teacher_model = self._render_model_selector(
+                    "teacher_model",
+                    model_options,
+                    recommended_models['teacher'],
+                    "回答生成に使用するモデル。複雑な内容に対応するため高性能モデルを推奨。"
+                )
+                settings['teacher_model'] = teacher_model
             
+            with col3:
+                st.markdown("**📋 要約エージェント**")
+                st.caption("要約・レポート作成担当")
+                summarizer_model = self._render_model_selector(
+                    "summarizer_model", 
+                    model_options,
+                    recommended_models['summarizer'],
+                    "要約とレポート作成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
+                )
+                settings['summarizer_model'] = summarizer_model
+                
+            # 一括設定オプション
+            st.divider()
+            st.markdown("**⚡ 一括設定**")
+            col_preset1, col_preset2, col_preset3 = st.columns(3)
+            
+            with col_preset1:
+                if st.button("💰 コスト重視", help="全エージェントを超軽量モデル（GPT-5 Nano）に設定"):
+                    settings['student_model'] = 'gpt-5-nano'
+                    settings['teacher_model'] = 'gpt-5-nano'  
+                    settings['summarizer_model'] = 'gpt-5-nano'
+                    st.rerun()
+            
+            with col_preset2:
+                if st.button("⚖️ バランス重視", help="最新モデルで最適バランス（推奨）"):
+                    settings['student_model'] = 'gpt-5-mini'
+                    settings['teacher_model'] = 'gpt-5'
+                    settings['summarizer_model'] = 'gpt-5-nano'
+                    st.rerun()
+            
+            with col_preset3:
+                if st.button("🚀 性能重視", help="全エージェントを最高性能モデル（GPT-5）に設定"):
+                    settings['student_model'] = 'gpt-5'
+                    settings['teacher_model'] = 'gpt-5'
+                    settings['summarizer_model'] = 'gpt-5'
+                    st.rerun()
+                    
         else:
             st.error("利用可能なモデルが取得できませんでした。APIキーを確認してください。")
-            settings['model_id'] = 'gpt-4o-mini'
+            settings['student_model'] = 'gpt-5-mini'
+            settings['teacher_model'] = 'gpt-5'
+            settings['summarizer_model'] = 'gpt-5-nano'
         
         st.divider()
         
@@ -113,6 +162,29 @@ class UIComponents:
             settings['max_followups'] = 0
         
         return settings
+    
+    def _render_model_selector(self, key: str, model_options: list, default_model: str, help_text: str) -> str:
+        """モデル選択セレクトボックスを描画"""
+        # デフォルトモデルのインデックスを取得
+        default_index = 0
+        for i, (name, model_id) in enumerate(model_options):
+            if model_id == default_model:
+                default_index = i
+                break
+        
+        selected_model_name = st.selectbox(
+            "モデル選択",
+            options=[name for name, _ in model_options],
+            index=default_index,
+            key=key,
+            help=help_text
+        )
+        
+        # 選択されたモデルのIDを取得
+        selected_model_id = next(model_id for name, model_id in model_options if name == selected_model_name)
+        st.caption(f"💡 {selected_model_id}")
+        
+        return selected_model_id
     
     @staticmethod
     def render_document_info(doc_data: Dict[str, Any]):

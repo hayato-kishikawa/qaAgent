@@ -14,6 +14,7 @@ class BaseAgent(ABC):
         self.prompt_version = prompt_version
         self.prompt_loader = PromptLoader()
         self.agent = None
+        self.current_model = None
         
         self._initialize_agent()
     
@@ -42,6 +43,26 @@ class BaseAgent(ABC):
         """プロンプトバージョンを更新"""
         self.prompt_version = version
         self._initialize_agent()
+    
+    def set_model(self, model_id: str):
+        """使用モデルを設定"""
+        if self.current_model != model_id:
+            self.current_model = model_id
+            # 個別のKernelServiceを作成してモデルを設定
+            self._create_custom_kernel_service(model_id)
+            self._initialize_agent()
+    
+    def _create_custom_kernel_service(self, model_id: str):
+        """カスタムKernelServiceを作成（個別モデル用）"""
+        try:
+            # 新しいKernelServiceインスタンスを作成
+            from services.kernel_service import KernelService
+            custom_kernel_service = KernelService()
+            custom_kernel_service.update_model(model_id)
+            self.kernel_service = custom_kernel_service
+        except Exception as e:
+            import streamlit as st
+            st.warning(f"{self.agent_type}エージェントのモデル設定に失敗: {str(e)}")
     
     @abstractmethod
     def process_message(self, message: str, context: Optional[Dict[str, Any]] = None) -> str:

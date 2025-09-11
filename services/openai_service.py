@@ -45,11 +45,19 @@ class OpenAIService:
         """モデルIDを表示用の名前に変換"""
         # 表示用の名前変換
         name_mapping = {
-            'gpt-4o': 'GPT-4o (最新)',
+            # GPT-5系 (最新・最高性能)
+            'gpt-5': 'GPT-5 (最新・最高性能)',
+            'gpt-5-mini': 'GPT-5 Mini (最新・高速・低コスト)',
+            'gpt-5-nano': 'GPT-5 Nano (最新・超軽量)',
+            
+            # GPT-4o系
+            'gpt-4o': 'GPT-4o (高性能)',
             'gpt-4o-mini': 'GPT-4o Mini (高速・低コスト)',
             'gpt-4-turbo': 'GPT-4 Turbo',
             'gpt-4': 'GPT-4',
             'gpt-3.5-turbo': 'GPT-3.5 Turbo',
+            
+            # o1系
             'o1-preview': 'o1-preview (推論特化)',
             'o1-mini': 'o1-mini (推論・高速)',
         }
@@ -58,14 +66,16 @@ class OpenAIService:
     
     def _get_model_category(self, model_id: str) -> str:
         """モデルのカテゴリを取得"""
-        if 'o1' in model_id:
+        if 'gpt-5' in model_id:
+            return '0_latest'     # GPT-5系（最新・最優先）
+        elif 'o1' in model_id:
             return '1_reasoning'  # 推論特化モデル
         elif 'gpt-4o' in model_id:
-            return '2_latest'     # 最新モデル
+            return '2_advanced'   # GPT-4o系（高性能）
         elif 'gpt-4' in model_id:
-            return '3_advanced'   # 高性能モデル
+            return '3_standard'   # GPT-4系（標準）
         elif 'gpt-3.5' in model_id:
-            return '4_standard'   # 標準モデル
+            return '4_legacy'     # GPT-3.5系（レガシー）
         else:
             return '5_other'      # その他
     
@@ -73,8 +83,12 @@ class OpenAIService:
         """デフォルトモデルを取得"""
         models = self.get_available_models()
         
-        # 利用可能なモデルから優先順位で選択
-        preferred_models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']
+        # 利用可能なモデルから優先順位で選択（GPT-5系を最優先）
+        preferred_models = [
+            'gpt-5', 'gpt-5-mini', 'gpt-5-nano',           # GPT-5系（最優先）
+            'gpt-4o', 'gpt-4o-mini',                       # GPT-4o系
+            'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'       # 従来モデル
+        ]
         
         for preferred in preferred_models:
             for model in models:
@@ -86,7 +100,7 @@ class OpenAIService:
             return models[0]['id']
         
         # フォールバック
-        return 'gpt-4o-mini'
+        return 'gpt-5-mini'
     
     def validate_api_key(self, api_key: str) -> Dict[str, Any]:
         """APIキーの有効性を検証"""

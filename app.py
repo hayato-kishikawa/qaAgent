@@ -112,7 +112,9 @@ class QAApp:
             # 処理設定を収集
             processing_settings = {
                 'qa_turns': upload_result['qa_turns'],
-                'model_id': upload_result['model_id'],
+                'student_model': upload_result['student_model'],
+                'teacher_model': upload_result['teacher_model'],
+                'summarizer_model': upload_result['summarizer_model'],
                 'enable_followup': upload_result['enable_followup'],
                 'followup_threshold': upload_result['followup_threshold'],
                 'max_followups': upload_result['max_followups']
@@ -149,10 +151,17 @@ class QAApp:
         # 処理設定をセッションに保存
         SessionManager.set_processing_settings(processing_settings)
         
-        # 使用モデルを更新
+        # エージェント別モデル設定を表示
+        model_info = (
+            f"🎓 学生: {processing_settings['student_model']} | "
+            f"👨‍🏫 教師: {processing_settings['teacher_model']} | "
+            f"📋 要約: {processing_settings['summarizer_model']}"
+        )
+        st.info(f"🤖 {model_info}")
+        
+        # 各エージェントのモデルを設定
         try:
-            self.kernel_service.update_model(processing_settings['model_id'])
-            st.info(f"🤖 使用モデル: {processing_settings['model_id']}")
+            self._configure_agent_models(processing_settings)
         except Exception as e:
             st.warning(f"モデル設定警告: {str(e)}")
         
@@ -167,17 +176,34 @@ class QAApp:
             # 文書情報を表示
             self.components.render_document_info(pdf_data)
             
-            # ステップ2: 要約生成
-            with st.spinner("📋 文書要約を生成中..."):
-                summary = asyncio.run(self._generate_summary(pdf_data['text_content']))
-                SessionManager.set_summary(summary)
+            # 並列処理オプション
+            use_parallel = st.checkbox("⚡ 並列処理を有効にする", 
+                                     value=True, 
+                                     help="要約とQ&Aを並列処理して高速化します（推奨）")
             
-            st.success("✅ 要約生成完了")
-            self.components.render_summary_section(summary)
+            if use_parallel:
+                # 要約とQ&Aを並列実行
+                with st.spinner("📋 要約生成とQ&Aセッションを並列実行中..."):
+                    summary, qa_pairs = asyncio.run(self._run_parallel_summary_and_qa(pdf_data, processing_settings))
+                    SessionManager.set_summary(summary)
+            else:
+                # 従来の順次処理
+                # ステップ2: 要約生成
+                with st.spinner("📋 文書要約を生成中..."):
+                    summary = asyncio.run(self._generate_summary(pdf_data['text_content']))
+                    SessionManager.set_summary(summary)
+                
+                st.success("✅ 要約生成完了")
+                self.components.render_summary_section(summary)
+                
+                # ステップ3: Q&Aセッション
+                st.subheader("💬 Q&Aセッション")
+                qa_pairs = self._run_streaming_qa_session(pdf_data, processing_settings)
             
-            # ステップ3: Q&Aセッションをストリーミング実行
-            st.subheader("💬 Q&Aセッション")
-            qa_pairs = self._run_streaming_qa_session(pdf_data, processing_settings)
+            # 結果を表示
+            st.success("✅ 要約・Q&Aセッション完了")
+            if not use_parallel:  # 並列処理の場合は後で表示
+                self.components.render_summary_section(summary)
             
             # ステップ4: 最終レポート生成
             with st.spinner("📊 最終レポートを作成中..."):
@@ -523,6 +549,241 @@ class QAApp:
                 break
         
         return followup_pairs
+    
+    async def _run_parallel_summary_and_qa(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> tuple:
+        """要約とQ&Aセッションを並列実行"""
+        # 要約タスクを作成
+        summary_task = self._generate_summary_async(pdf_data['text_content'])
+        
+        # Q&Aタスクを作成
+        qa_task = self._run_parallel_qa_session(pdf_data, processing_settings)
+        
+        # 並列実行
+        summary, qa_pairs = await asyncio.gather(summary_task, qa_task)
+        
+        return summary, qa_pairs
+    
+    async def _generate_summary_async(self, document_content: str) -> str:
+        """文書要約を非同期生成"""
+        try:
+            prompt = self.summarizer_agent.create_document_summary(document_content)
+            summary = await self.orchestrator.single_agent_invoke(
+                self.summarizer_agent.get_agent(),
+                prompt
+            )
+            return summary
+        except Exception as e:
+            return f"要約生成エラー: {str(e)}"
+    
+    def _configure_agent_models(self, processing_settings: Dict[str, Any]):
+        """各エージェントのモデルを個別設定"""
+        # 学生エージェントのモデル設定
+        self.student_agent.set_model(processing_settings['student_model'])
+        
+        # 教師エージェントのモデル設定  
+        self.teacher_agent.set_model(processing_settings['teacher_model'])
+        
+        # 要約エージェントのモデル設定
+        self.summarizer_agent.set_model(processing_settings['summarizer_model'])
+    
+    async def _run_parallel_qa_session(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
+        """並列処理を活用したQ&Aセッション実行"""
+        qa_pairs = []
+        
+        # 設定を取得
+        qa_turns = processing_settings['qa_turns']
+        enable_followup = processing_settings['enable_followup']
+        followup_threshold = processing_settings['followup_threshold']
+        max_followups = processing_settings['max_followups']
+        
+        # 文書をセクションに分割
+        sections = self._split_document(pdf_data['text_content'], qa_turns)
+        self.student_agent.set_document_sections(sections)
+        self.teacher_agent.set_document_content(pdf_data['text_content'])
+        
+        # プログレスバーを作成
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # セクションを並列処理用にバッチ分け（3セクションずつ）
+        batch_size = 3
+        for batch_start in range(0, len(sections), batch_size):
+            batch_sections = sections[batch_start:batch_start + batch_size]
+            batch_tasks = []
+            
+            # 並列タスクを作成
+            for i, section in enumerate(batch_sections):
+                section_index = batch_start + i
+                task = self._process_section_async(section, section_index, qa_pairs, 
+                                                 enable_followup, followup_threshold, max_followups)
+                batch_tasks.append(task)
+            
+            # 並列実行
+            status_text.text(f"セクション {batch_start+1}-{min(batch_start+batch_size, len(sections))} を並列処理中...")
+            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+            
+            # 結果を処理
+            for result in batch_results:
+                if isinstance(result, Exception):
+                    st.error(f"並列処理エラー: {str(result)}")
+                else:
+                    qa_pairs.extend(result)
+                    
+                    # StreamlitのセッションにQ&Aペアを追加
+                    for qa_pair in result:
+                        SessionManager.add_qa_pair(qa_pair['question'], qa_pair['answer'])
+            
+            # 進捗更新
+            progress = min(1.0, (batch_start + batch_size) / len(sections))
+            progress_bar.progress(progress)
+        
+        # 完了
+        progress_bar.progress(1.0)
+        status_text.text("並列Q&Aセッション完了！")
+        
+        return qa_pairs
+    
+    async def _process_section_async(self, section: str, section_index: int, previous_qa: list,
+                                   enable_followup: bool, followup_threshold: float, max_followups: int) -> list:
+        """セクション処理の非同期版"""
+        section_qa_pairs = []
+        
+        try:
+            # 並列で質問と前のセクションの処理を実行
+            question_task = self._generate_question_async(section, previous_qa)
+            
+            # 質問生成を待つ
+            question = await question_task
+            
+            # 回答生成
+            answer = await self._generate_answer_async(question, section, previous_qa)
+            
+            # メインQ&Aペア
+            main_qa_pair = {
+                "question": question,
+                "answer": answer,
+                "section": section_index,
+                "type": "main"
+            }
+            section_qa_pairs.append(main_qa_pair)
+            
+            # フォローアップ質問（必要な場合）
+            if enable_followup:
+                complexity_score = self._evaluate_answer_complexity(answer)
+                if complexity_score >= followup_threshold:
+                    followup_pairs = await self._handle_followup_questions_async(
+                        section, answer, section_index, previous_qa, followup_threshold, max_followups
+                    )
+                    section_qa_pairs.extend(followup_pairs)
+                    
+        except Exception as e:
+            st.error(f"セクション{section_index+1}の処理エラー: {str(e)}")
+        
+        return section_qa_pairs
+    
+    async def _generate_question_async(self, section: str, previous_qa: list) -> str:
+        """質問を非同期生成"""
+        question_prompt = self.student_agent.process_message("", {
+            "current_section_content": section,
+            "document_content": self.teacher_agent.document_content,
+            "previous_qa": previous_qa
+        })
+        
+        return await self.orchestrator.single_agent_invoke(
+            self.student_agent.get_agent(),
+            question_prompt
+        )
+    
+    async def _generate_answer_async(self, question: str, section: str, previous_qa: list) -> str:
+        """回答を非同期生成"""
+        answer_prompt = self.teacher_agent.process_message(question, {
+            "current_section_content": section,
+            "document_content": self.teacher_agent.document_content,
+            "previous_qa": previous_qa
+        })
+        
+        return await self.orchestrator.single_agent_invoke(
+            self.teacher_agent.get_agent(),
+            answer_prompt
+        )
+    
+    async def _handle_followup_questions_async(self, section: str, initial_answer: str, section_index: int, 
+                                             qa_pairs: list, threshold: float, max_followups: int) -> list:
+        """フォローアップ質問の非同期処理"""
+        followup_pairs = []
+        current_answer = initial_answer
+        
+        for followup_count in range(max_followups):
+            try:
+                # フォローアップ質問と回答を並列生成
+                followup_question_task = self._generate_followup_question_async(current_answer)
+                followup_question = await followup_question_task
+                
+                followup_answer = await self._generate_followup_answer_async(followup_question, section)
+                
+                # フォローアップペア
+                followup_pair = {
+                    "question": followup_question,
+                    "answer": followup_answer,
+                    "section": section_index,
+                    "type": "followup",
+                    "followup_count": followup_count + 1
+                }
+                followup_pairs.append(followup_pair)
+                
+                # 複雑度評価
+                new_complexity = self._evaluate_answer_complexity(followup_answer)
+                if new_complexity < threshold:
+                    break
+                    
+                current_answer = followup_answer
+                
+            except Exception as e:
+                st.warning(f"フォローアップ質問 {followup_count + 1} の生成に失敗: {str(e)}")
+                break
+        
+        return followup_pairs
+    
+    async def _generate_followup_question_async(self, current_answer: str) -> str:
+        """フォローアップ質問を非同期生成"""
+        followup_question_prompt = f"""
+あなたは好奇心旺盛な学習者です。先生の回答が専門的で理解が難しいため、より簡単に説明してもらいたいと思っています。
+
+先生の回答: {current_answer}
+
+以下の観点でフォローアップ質問を1つ生成してください：
+- 専門用語の意味を問う
+- 具体例を求める
+- より簡単な説明を求める
+- 関連する基本概念の説明を求める
+
+質問は自然で学習者らしい表現にしてください。
+"""
+        
+        return await self.orchestrator.single_agent_invoke(
+            self.student_agent.get_agent(),
+            followup_question_prompt
+        )
+    
+    async def _generate_followup_answer_async(self, followup_question: str, section: str) -> str:
+        """フォローアップ回答を非同期生成"""
+        followup_answer_prompt = f"""
+学習者からフォローアップ質問を受けました。より理解しやすく、親しみやすい説明をしてください。
+
+質問: {followup_question}
+文書セクション: {section}
+
+以下を心がけて回答してください：
+- 専門用語は平易な言葉で説明
+- 具体例や比喩を使用
+- 段階的で理解しやすい構成
+- 学習者の知識レベルに合わせた説明
+"""
+        
+        return await self.orchestrator.single_agent_invoke(
+            self.teacher_agent.get_agent(),
+            followup_answer_prompt
+        )
 
 def main():
     """メイン実行関数"""

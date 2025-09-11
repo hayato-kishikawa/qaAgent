@@ -110,7 +110,9 @@ class UploadTab:
             # Q&A設定
             qa_settings = self.components.render_qa_settings()
             result['qa_turns'] = qa_settings['qa_turns']
-            result['model_id'] = qa_settings['model_id']
+            result['student_model'] = qa_settings['student_model']
+            result['teacher_model'] = qa_settings['teacher_model']
+            result['summarizer_model'] = qa_settings['summarizer_model']
             result['enable_followup'] = qa_settings['enable_followup']
             result['followup_threshold'] = qa_settings['followup_threshold']
             result['max_followups'] = qa_settings['max_followups']
@@ -164,9 +166,23 @@ class ProcessingTab:
         if progress_text:
             st.caption(progress_text)
         
-        # 処理中断ボタン（将来の機能）
-        # if st.button("⏹️ 処理を中断"):
-        #     st.session_state['stop_processing'] = True
+        # 緊急リセット機能を追加
+        st.divider()
+        st.markdown("**🚨 処理が止まった場合**")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 処理をリセット", help="処理状態をリセットして最初からやり直します"):
+                from services.session_manager import SessionManager
+                SessionManager.reset_session()
+                st.rerun()
+        
+        with col2:
+            if st.button("⏹️ 処理を強制停止", help="現在の処理を強制停止します"):
+                from services.session_manager import SessionManager
+                SessionManager.stop_processing()
+                SessionManager.set_step("upload")
+                st.rerun()
 
 class ErrorTab:
     """エラー表示を管理するクラス"""
