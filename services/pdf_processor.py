@@ -80,11 +80,46 @@ class PDFProcessor:
         """
         try:
             # PDFを画像に変換
-            images = pdf2image.convert_from_bytes(pdf_file.read())
+            import platform
+            
+            # Windowsの場合、popplerパスを手動で設定を試行
+            if platform.system() == "Windows":
+                try:
+                    images = pdf2image.convert_from_bytes(pdf_file.read())
+                except Exception as e:
+                    # Windowsでpopplerパスエラーの場合のフォールバック
+                    import shutil
+                    poppler_path = None
+                    
+                    # 一般的なpopplerのインストール場所を確認
+                    possible_paths = [
+                        r"C:\poppler\Release-25.07.0-0\Library\bin",  # 手動インストール時の実際のパス
+                        r"C:\Program Files\poppler-24.02.0\Library\bin",  # Chocolatey版
+                        r"C:\Program Files\poppler\Library\bin",
+                        r"C:\Program Files (x86)\poppler\Library\bin", 
+                        r"C:\poppler\Library\bin",
+                        r"C:\tools\poppler\Library\bin"
+                    ]
+                    
+                    for path in possible_paths:
+                        if os.path.exists(path):
+                            poppler_path = path
+                            break
+                    
+                    if poppler_path:
+                        images = pdf2image.convert_from_bytes(pdf_file.read(), poppler_path=poppler_path)
+                    else:
+                        raise Exception(f"PDF画像抽出エラー: Popplerが見つかりません。READMEを参照してPopplerをインストールしてください。原因: {str(e)}")
+            else:
+                images = pdf2image.convert_from_bytes(pdf_file.read())
+                
             return images
         
         except Exception as e:
-            raise Exception(f"PDF画像抽出エラー: {str(e)}")
+            if "poppler" in str(e).lower() or "pdftoppm" in str(e).lower():
+                raise Exception(f"PDF画像抽出エラー: Popplerのインストールまたは設定に問題があります。READMEの手順に従ってPopplerをインストールしてください。詳細: {str(e)}")
+            else:
+                raise Exception(f"PDF画像抽出エラー: {str(e)}")
     
     def images_to_base64(self, images: List[Image.Image]) -> List[str]:
         """

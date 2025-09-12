@@ -96,7 +96,7 @@ class QAApp:
             elif current_step == "qa" or current_step == "completed":
                 self._render_results_step()
             
-            # タブを常に表示（データがある場合）
+            # タブを常に表示（データがある場合、ただし完了時は重複を避ける）
             if (current_step != "completed" and 
                 (SessionManager.get_summary() or SessionManager.get_qa_pairs() or SessionManager.get_final_report())):
                 st.divider()
@@ -211,12 +211,10 @@ class QAApp:
             
             # 結果を表示
             st.success("✅ 要約・Q&Aセッション完了")
-            if not use_parallel:  # 並列処理の場合は後で表示
-                self.components.render_summary_section(summary)
             
             # ステップ4: 最終レポート生成
             with st.spinner("📊 最終レポートを作成中..."):
-                final_report = asyncio.run(self._generate_final_report(pdf_data['text_content'], qa_pairs, summary))
+                final_report = asyncio.run(self._generate_final_report(pdf_data['text_content'], qa_pairs, initial_summary))
                 SessionManager.set_final_report(final_report)
             
             st.success("✅ 処理完了！下のタブで結果をご確認ください")
@@ -225,7 +223,6 @@ class QAApp:
             
             # 完了後にタブを表示
             st.divider()
-            st.subheader("📊 処理結果")
             self._render_results_step()
             
         except Exception as e:
@@ -722,7 +719,7 @@ class QAApp:
             return f"初期要約生成エラー: {str(e)}"
     
     async def _run_parallel_qa_only(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
-        """Q&Aセッションのみを並列実行"""
+        """Q&Aセッションのみを並列実行（結果を順次表示）"""
         try:
             # 設定を取得
             qa_turns = processing_settings['qa_turns']
@@ -739,54 +736,95 @@ class QAApp:
             self.student_agent.set_document_sections(sections)
             self.teacher_agent.set_document_content(pdf_data['text_content'])
             
-            # プログレスバーを作成
+            # プログレスバーとリアルタイム表示エリアを作成
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            qa_pairs = []
+            # リアルタイム結果表示用のコンテナ
+            results_container = st.container()
+            with results_container:
+                st.subheader("💬 Q&A結果（リアルタイム表示）")
+                result_placeholder = st.empty()
             
-            # セクションを並列処理用にバッチ分け（3セクションずつ）
-            batch_size = 3
-            for batch_start in range(0, len(sections), batch_size):
-                batch_sections = sections[batch_start:batch_start + batch_size]
-                batch_tasks = []
+            qa_pairs = []
+            completed_count = 0
+            total_sections = len(sections)
+            
+            # 全セクションのタスクを一度に作成
+            all_tasks = []
+            section_info = []  # セクション情報を保存
+            
+            for section_index, section in enumerate(sections):
+                # 使用する単語を決定（単語登録がある場合は優先）
+                target_keyword = None
+                if target_keywords and len(used_keywords) < len(target_keywords):
+                    # まだ使っていない単語を選択
+                    available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
+                    if available_keywords:
+                        target_keyword = available_keywords[0]
+                        used_keywords.add(target_keyword)
                 
-                # 並列タスクを作成
-                for i, section in enumerate(batch_sections):
-                    section_index = batch_start + i
+                task = self._process_section_async(section, section_index, [], 
+                                                 enable_followup, followup_threshold, max_followups,
+                                                 target_keyword)
+                all_tasks.append(task)
+                section_info.append({"section_index": section_index, "target_keyword": target_keyword})
+            
+            # 完了したタスクから順次処理
+            status_text.text(f"全{total_sections}セクションを並列処理中...")
+            
+            for completed_task in asyncio.as_completed(all_tasks):
+                try:
+                    result = await completed_task
+                    completed_count += 1
                     
-                    # 使用する単語を決定（単語登録がある場合は優先）
-                    target_keyword = None
-                    if target_keywords and len(used_keywords) < len(target_keywords):
-                        # まだ使っていない単語を選択
-                        available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
-                        if available_keywords:
-                            target_keyword = available_keywords[0]
-                            used_keywords.add(target_keyword)
-                    
-                    task = self._process_section_async(section, section_index, qa_pairs, 
-                                                     enable_followup, followup_threshold, max_followups,
-                                                     target_keyword)
-                    batch_tasks.append(task)
-                
-                # 並列実行
-                status_text.text(f"セクション {batch_start+1}-{min(batch_start+batch_size, len(sections))} を並列処理中...")
-                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-                
-                # 結果を処理
-                for result in batch_results:
-                    if isinstance(result, Exception):
-                        st.error(f"並列処理エラー: {str(result)}")
-                    else:
+                    if result:
                         qa_pairs.extend(result)
                         
-                        # StreamlitのセッションにQ&Aペアを追加
+                        # セッションにも追加
                         for qa_pair in result:
                             SessionManager.add_qa_pair(qa_pair['question'], qa_pair['answer'])
-                
-                # 進捗更新
-                progress = min(1.0, (batch_start + batch_size) / len(sections))
-                progress_bar.progress(progress)
+                            if qa_pair.get('followup_question'):
+                                SessionManager.add_qa_pair(qa_pair['followup_question'], qa_pair['followup_answer'])
+                        
+                        # 累積結果を表示（全てのQ&Aペアを再表示）
+                        with result_placeholder.container():
+                            for i, qa_pair in enumerate(qa_pairs):
+                                qa_num = i + 1
+                                with st.expander(f"🔍 Q&A {qa_num}: {qa_pair['question'][:50]}...", expanded=False):
+                                    st.write(f"**質問:** {qa_pair['question']}")
+                                    st.write(f"**回答:** {qa_pair['answer']}")
+                                    
+                                    # フォローアップ質問をインデントして表示
+                                    if qa_pair.get('followup_question'):
+                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**🔄 Q{qa_num}-追加質問:**", unsafe_allow_html=True)
+                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{qa_pair['followup_question']}", unsafe_allow_html=True)
+                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**💡 Q{qa_num}-追加回答:**", unsafe_allow_html=True)
+                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{qa_pair['followup_answer']}", unsafe_allow_html=True)
+                                    
+                                    # キャプション情報（セクションと専門性スコア）
+                                    caption_parts = []
+                                    section = qa_pair.get('section', 'N/A')
+                                    if section != 'N/A':
+                                        caption_parts.append(f"セクション: {section}")
+                                    
+                                    complexity_score = qa_pair.get('complexity_score', 'N/A')
+                                    if complexity_score != 'N/A':
+                                        caption_parts.append(f"専門性: {complexity_score}")
+                                    
+                                    if caption_parts:
+                                        st.caption(" | ".join(caption_parts))
+                    
+                    # 進捗更新
+                    progress = completed_count / total_sections
+                    progress_bar.progress(progress)
+                    status_text.text(f"完了: {completed_count}/{total_sections} セクション")
+                    
+                except Exception as e:
+                    st.error(f"セクション処理エラー: {str(e)}")
+                    completed_count += 1
+                    progress = completed_count / total_sections
+                    progress_bar.progress(progress)
             
             # 完了
             progress_bar.progress(1.0)

@@ -60,12 +60,80 @@ streamlit run app.py
 
 ブラウザで `http://localhost:8502` にアクセスしてアプリを使用できます。
 
-### 4. 追加の依存関係（macOSの場合）
+### 4. 追加の依存関係
 
+#### macOSの場合
 PDF画像抽出機能を使用するには、popplerが必要です：
 
 ```bash
 brew install poppler
+```
+
+#### Windowsの場合
+Windowsでのセットアップには追加の手順が必要です：
+
+**1. Visual C++ 再頒布パッケージのインストール（重要）**
+```powershell
+# Microsoft Visual C++ Redistributable (最新版)をインストール
+# https://learn.microsoft.com/ja-jp/cpp/windows/latest-supported-vc-redist
+# x64版をダウンロードしてインストール
+```
+
+**2. Popplerのインストール**
+```powershell
+# Chocolateyを使用する場合（推奨）
+choco install poppler
+
+# または手動でインストール
+# PowerShellで以下を実行：
+Invoke-WebRequest -Uri "https://github.com/oschwartz10612/poppler-windows/releases/download/v25.07.0-0/Release-25.07.0-0.zip" -OutFile "poppler.zip"
+Expand-Archive .\poppler.zip -DestinationPath C:\poppler
+
+# 環境変数PATHに追加（管理者権限で実行）
+setx PATH "%PATH%;C:\poppler\Release-25.07.0-0\Library\bin" /M
+
+# ⚠️ 重要: setx実行後はPowerShellを完全に閉じて再起動してください
+# 現在のセッションでは環境変数が反映されません
+
+# PATH設定の確認
+echo $env:PATH
+
+# または手動でシステム環境変数を設定：
+# 1. 「システムのプロパティ」→「環境変数」
+# 2. システム環境変数の「Path」を編集
+# 3. 「C:\poppler\Release-25.07.0-0\Library\bin」を追加
+# 4. PowerShellを再起動
+```
+
+**3. Visual Studio Build Toolsのインストール（必要に応じて）**
+一部のPythonパッケージ（特にsemantic-kernelなど）のインストール時にC++コンパイラが必要な場合があります：
+
+```powershell
+# Visual Studio Build Tools 2022をインストール
+# https://visualstudio.microsoft.com/ja/downloads/#build-tools-for-visual-studio-2022
+
+# または軽量な Microsoft C++ Build Toolsをインストール
+# https://visualstudio.microsoft.com/visual-cpp-build-tools/
+
+# Chocolateyを使用する場合
+choco install visualstudio2022buildtools
+```
+
+**エラーが発生した場合の対処法:**
+- `pip install`でコンパイルエラーが発生する場合は、まずBuild Toolsをインストール
+- それでも解決しない場合は、プリコンパイル版を試行: `pip install --only-binary=all`
+- 特定のパッケージが問題の場合は個別にインストール: `pip install パッケージ名 --no-build-isolation`
+
+**4. Windowsでの仮想環境有効化**
+```cmd
+# コマンドプロンプトの場合
+venv\Scripts\activate.bat
+
+# PowerShellの場合  
+venv\Scripts\Activate.ps1
+
+# PowerShellで実行ポリシーエラーが出る場合
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 ## プロジェクト構造
@@ -150,9 +218,16 @@ qaAgent/
 
 1. **APIキーエラー**: `.env`ファイルにOpenAI APIキーが正しく設定されているか確認
 2. **ファイルサイズエラー**: PDFファイルが50MB以下であることを確認
-3. **PDF画像抽出エラー**: macOSの場合は`brew install poppler`でpopplerをインストール
-4. **トークン超過**: 文書が長すぎる場合は自動分割されますが、それでも処理できない場合はより短い文書を使用
-5. **処理が遅い**: 大きなファイルや多いQ&A数の場合は処理時間が長くなります
+3. **PDF画像抽出エラー**: 
+   - macOS: `brew install poppler`でpopplerをインストール
+   - Windows: 
+     1. Visual C++ Redistributableをインストール
+     2. Poppler for WindowsをインストールしてPATHを設定
+     3. PowerShellを再起動してPATHを反映
+4. **プロンプト読み込みエラー**: `latest.ini`ファイルの内容を確認。v1形式でない場合は対応するバージョンファイルを作成
+5. **C++コンパイラエラー（Windows）**: Visual Studio Build Toolsをインストール
+6. **トークン超過**: 文書が長すぎる場合は自動分割されますが、それでも処理できない場合はより短い文書を使用
+7. **処理が遅い**: 大きなファイルや多いQ&A数の場合は処理時間が長くなります
 
 ### エラー対処法
 

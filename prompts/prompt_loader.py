@@ -22,17 +22,30 @@ class PromptLoader:
         prompt_path = os.path.join(self.prompts_dir, agent_type, f"{version}.ini")
         
         if not os.path.exists(prompt_path):
-            raise FileNotFoundError(f"プロンプトファイルが見つかりません: {prompt_path}")
+            # フォールバック: v1_0_0を試行
+            fallback_path = os.path.join(self.prompts_dir, agent_type, "v1_0_0.ini")
+            if version == "latest" and os.path.exists(fallback_path):
+                print(f"Warning: latest.ini not found, falling back to v1_0_0.ini for {agent_type}")
+                prompt_path = fallback_path
+            else:
+                raise FileNotFoundError(f"プロンプトファイルが見つかりません: {prompt_path}")
         
-        config = configparser.ConfigParser()
-        config.read(prompt_path, encoding='utf-8')
-        
-        # ConfigParserの内容を辞書に変換
-        prompt_dict = {}
-        for section in config.sections():
-            prompt_dict[section] = dict(config.items(section))
-        
-        return prompt_dict
+        try:
+            config = configparser.ConfigParser()
+            config.read(prompt_path, encoding='utf-8')
+            
+            if not config.sections():
+                raise ValueError(f"プロンプトファイルが空または不正な形式です: {prompt_path}")
+            
+            # ConfigParserの内容を辞書に変換
+            prompt_dict = {}
+            for section in config.sections():
+                prompt_dict[section] = dict(config.items(section))
+            
+            return prompt_dict
+            
+        except Exception as e:
+            raise RuntimeError(f"プロンプトファイルの読み込みエラー ({prompt_path}): {str(e)}")
     
     def get_system_prompt(self, agent_type: str, version: str = "latest") -> str:
         """

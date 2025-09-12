@@ -72,10 +72,31 @@ class TabManager:
             
             with st.expander(f"Q{i}: {question[:50]}...", expanded=False):
                 st.markdown(f"**質問：** {question}")
+                
+                # 回答表示
                 st.markdown(f"**回答：** {answer}")
                 
+                # フォローアップ質問をインデントして表示
+                followup_question = qa_pair.get('followup_question', '')
+                followup_answer = qa_pair.get('followup_answer', '')
+                
+                if followup_question:
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**🔄 Q{i}-追加質問:**", unsafe_allow_html=True)
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{followup_question}", unsafe_allow_html=True)
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**💡 Q{i}-追加回答:**", unsafe_allow_html=True)
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{followup_answer}", unsafe_allow_html=True)
+                
+                # キャプション情報（タイムスタンプと専門性スコア）
+                caption_parts = []
                 if timestamp:
-                    st.caption(f"生成時刻: {timestamp}")
+                    caption_parts.append(f"生成時刻: {timestamp}")
+                
+                complexity_score = qa_pair.get('complexity_score', 'N/A')
+                if complexity_score != 'N/A':
+                    caption_parts.append(f"専門性: {complexity_score}")
+                
+                if caption_parts:
+                    st.caption(" | ".join(caption_parts))
     
     def get_streaming_display(self) -> Optional[StreamingDisplay]:
         """ストリーミング表示オブジェクトを取得"""
