@@ -113,51 +113,54 @@ class UploadTab:
     def __init__(self):
         self.components = UIComponents()
     
-    def render_upload_section(self) -> Dict[str, Any]:
+    def render_upload_section(self, sidebar_settings: Dict[str, Any]) -> Dict[str, Any]:
         """アップロード・設定セクションを描画"""
         result = {
             'uploaded_file': None,
             'qa_turns': 10,
             'start_processing': False
         }
-        
+
         # ファイルアップローダー
         uploaded_file = self.components.render_file_uploader()
         result['uploaded_file'] = uploaded_file
-        
+
         if uploaded_file:
             st.success(f"✅ ファイルがアップロードされました: {uploaded_file.name}")
-            
-            # プロンプトバージョン設定
-            prompt_versions = self.components.render_prompt_version_settings()
-            result.update(prompt_versions)
-            
-            # Q&A設定
-            qa_settings = self.components.render_qa_settings()
-            result['qa_turns'] = qa_settings['qa_turns']
-            result['student_model'] = qa_settings['student_model']
-            result['teacher_model'] = qa_settings['teacher_model']
-            result['summarizer_model'] = qa_settings['summarizer_model']
-            result['enable_followup'] = qa_settings['enable_followup']
-            result['followup_threshold'] = qa_settings['followup_threshold']
-            result['max_followups'] = qa_settings['max_followups']
-            
+
+            # サイドバー設定を結果に統合
+            result.update(sidebar_settings)
+
+            # 文書情報を表示（PDF処理後に情報があれば）
+            doc_data = st.session_state.get('document_data', {})
+            if doc_data:
+                self.components.render_document_info(doc_data)
+
+            st.divider()
+
             # 実行ボタン
-            col1, col2 = st.columns([1, 3])
+            col1, col2 = st.columns([1, 1])
             with col1:
                 start_button = st.button("🚀 実行開始", type="primary", use_container_width=True)
                 result['start_processing'] = start_button
-                
+
                 # 即時フィードバック（rerunしない）
                 if start_button:
                     st.success("🔄 処理を開始しています...")
-            
+
             with col2:
                 if st.button("🔄 リセット", use_container_width=True):
                     # セッションリセットのフラグを設定
                     st.session_state['reset_requested'] = True
                     st.rerun()
-        
+        else:
+            # ファイルがアップロードされていない場合の説明
+            st.info("📄 PDFファイルをアップロードしてください")
+            st.markdown("**使用方法:**")
+            st.markdown("1. 左側のサイドバーで各種設定を確認・調整")
+            st.markdown("2. PDFファイルをアップロード")
+            st.markdown("3. 実行開始ボタンでQ&Aセッションを開始")
+
         return result
 
 class ProcessingTab:
