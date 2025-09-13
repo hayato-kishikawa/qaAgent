@@ -90,7 +90,7 @@ class UIComponents:
         # Q&Aターン数設定
         settings['qa_turns'] = st.slider(
             "Q&Aターン数",
-            min_value=5,
+            min_value=1,
             max_value=20,
             value=10,
             step=1,
@@ -99,53 +99,54 @@ class UIComponents:
         
         # エージェント別モデル選択
         st.markdown("**🤖 エージェント別モデル設定**")
-        openai_service = OpenAIService()
-        available_models = openai_service.get_available_models()
         
-        if available_models:
-            model_options = [(model['name'], model['id']) for model in available_models]
-            default_model = openai_service.get_default_model()
-            
-            # 推奨モデル設定（GPT-5系を優先）
-            recommended_models = {
-                'student': 'gpt-5-mini',       # 最新軽量モデル
-                'teacher': 'gpt-5',            # 最新最高性能モデル
-                'summarizer': 'gpt-5-nano'     # 最新超軽量モデル
-            }
-            
-            # 3つのカラムに分けて表示
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown("**🎓 学生エージェント**")
-                st.caption("質問生成担当")
-                student_model = self._render_model_selector(
-                    "student_model",
-                    model_options,
-                    recommended_models['student'],
-                    "質問生成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
-                )
-                settings['student_model'] = student_model
-            
-            with col2:
-                st.markdown("**👨‍🏫 教師エージェント**")  
-                st.caption("回答生成担当")
-                teacher_model = self._render_model_selector(
-                    "teacher_model",
-                    model_options,
-                    recommended_models['teacher'],
-                    "回答生成に使用するモデル。複雑な内容に対応するため高性能モデルを推奨。"
-                )
-                settings['teacher_model'] = teacher_model
-            
-            with col3:
-                st.markdown("**📋 要約エージェント**")
-                st.caption("要約・レポート作成担当")
-                summarizer_model = self._render_model_selector(
-                    "summarizer_model", 
-                    model_options,
-                    recommended_models['summarizer'],
-                    "要約とレポート作成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
+        # GPT-5系のみに制限
+        gpt5_models = [
+            ('GPT-5', 'gpt-5'),
+            ('GPT-5 Mini', 'gpt-5-mini'), 
+            ('GPT-5 Nano', 'gpt-5-nano')
+        ]
+        
+        # 推奨モデル設定（GPT-5系）
+        recommended_models = {
+            'student': 'gpt-5-mini',       # 最新軽量モデル
+            'teacher': 'gpt-5',            # 最新最高性能モデル
+            'summarizer': 'gpt-5-nano'     # 最新超軽量モデル
+        }
+        
+        # 3つのカラムに分けて表示
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**🎓 学生エージェント**")
+            st.caption("質問生成担当")
+            student_model = self._render_model_selector(
+                "student_model",
+                gpt5_models,
+                recommended_models['student'],
+                "質問生成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
+            )
+            settings['student_model'] = student_model
+        
+        with col2:
+            st.markdown("**👨‍🏫 教師エージェント**")  
+            st.caption("回答生成担当")
+            teacher_model = self._render_model_selector(
+                "teacher_model",
+                gpt5_models,
+                recommended_models['teacher'],
+                "回答生成に使用するモデル。複雑な内容に対応するため高性能モデルを推奨。"
+            )
+            settings['teacher_model'] = teacher_model
+        
+        with col3:
+            st.markdown("**📋 要約エージェント**")
+            st.caption("要約・レポート作成担当")
+            summarizer_model = self._render_model_selector(
+                "summarizer_model", 
+                gpt5_models,
+                recommended_models['summarizer'],
+                "要約とレポート作成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
                 )
                 settings['summarizer_model'] = summarizer_model
                 
@@ -156,57 +157,29 @@ class UIComponents:
             
             with col_preset1:
                 if st.button("💰 コスト重視", help="全エージェントを超軽量モデル（GPT-5 Nano）に設定"):
-                    # selectboxをクリアしてからプリセット値を設定
-                    if 'student_model' in st.session_state:
-                        del st.session_state['student_model']
-                    if 'teacher_model' in st.session_state:
-                        del st.session_state['teacher_model']
-                    if 'summarizer_model' in st.session_state:
-                        del st.session_state['summarizer_model']
-                    
-                    # プリセット値を保存
-                    st.session_state['preset_student_model'] = 'gpt-5-nano'
-                    st.session_state['preset_teacher_model'] = 'gpt-5-nano'  
-                    st.session_state['preset_summarizer_model'] = 'gpt-5-nano'
+                    # モデル選択のみをプリセット値に変更（他の設定は保持）
+                    st.session_state['student_model'] = 'gpt-5-nano'
+                    st.session_state['teacher_model'] = 'gpt-5-nano'  
+                    st.session_state['summarizer_model'] = 'gpt-5-nano'
                     st.rerun()
             
             with col_preset2:
                 if st.button("⚖️ バランス重視", help="最新モデルで最適バランス（推奨）"):
-                    # selectboxをクリアしてからプリセット値を設定
-                    if 'student_model' in st.session_state:
-                        del st.session_state['student_model']
-                    if 'teacher_model' in st.session_state:
-                        del st.session_state['teacher_model']
-                    if 'summarizer_model' in st.session_state:
-                        del st.session_state['summarizer_model']
-                    
-                    # プリセット値を保存
-                    st.session_state['preset_student_model'] = 'gpt-5-mini'
-                    st.session_state['preset_teacher_model'] = 'gpt-5'
-                    st.session_state['preset_summarizer_model'] = 'gpt-5-nano'
+                    # モデル選択のみをプリセット値に変更（他の設定は保持）
+                    st.session_state['student_model'] = 'gpt-5-mini'
+                    st.session_state['teacher_model'] = 'gpt-5'
+                    st.session_state['summarizer_model'] = 'gpt-5-nano'
                     st.rerun()
             
             with col_preset3:
                 if st.button("🚀 性能重視", help="全エージェントを最高性能モデル（GPT-5）に設定"):
-                    # selectboxをクリアしてからプリセット値を設定
-                    if 'student_model' in st.session_state:
-                        del st.session_state['student_model']
-                    if 'teacher_model' in st.session_state:
-                        del st.session_state['teacher_model']
-                    if 'summarizer_model' in st.session_state:
-                        del st.session_state['summarizer_model']
-                    
-                    # プリセット値を保存
-                    st.session_state['preset_student_model'] = 'gpt-5'
-                    st.session_state['preset_teacher_model'] = 'gpt-5'
-                    st.session_state['preset_summarizer_model'] = 'gpt-5'
+                    # モデル選択のみをプリセット値に変更（他の設定は保持）
+                    st.session_state['student_model'] = 'gpt-5'
+                    st.session_state['teacher_model'] = 'gpt-5'
+                    st.session_state['summarizer_model'] = 'gpt-5'
                     st.rerun()
                     
-        else:
-            st.error("利用可能なモデルが取得できませんでした。APIキーを確認してください。")
-            settings['student_model'] = 'gpt-5-mini'
-            settings['teacher_model'] = 'gpt-5'
-            settings['summarizer_model'] = 'gpt-5-nano'
+        # フォローアップ設定
         
         st.divider()
         
@@ -271,17 +244,13 @@ class UIComponents:
     
     def _render_model_selector(self, key: str, model_options: list, default_model: str, help_text: str) -> str:
         """モデル選択セレクトボックスを描画"""
-        # プリセットが設定されている場合はそれを優先
-        preset_key = f"preset_{key}"
-        if preset_key in st.session_state:
-            default_model = st.session_state[preset_key]
-            # プリセット使用後は削除
-            del st.session_state[preset_key]
+        # セッション状態に値がある場合はそれを使用、なければデフォルト値
+        current_value = st.session_state.get(key, default_model)
         
         # デフォルトモデルのインデックスを取得
         default_index = 0
         for i, (name, model_id) in enumerate(model_options):
-            if model_id == default_model:
+            if model_id == current_value:
                 default_index = i
                 break
         
