@@ -117,7 +117,10 @@ class PDFProcessor:
         
         except Exception as e:
             if "poppler" in str(e).lower() or "pdftoppm" in str(e).lower():
-                raise Exception(f"PDF画像抽出エラー: Popplerのインストールまたは設定に問題があります。READMEの手順に従ってPopplerをインストールしてください。詳細: {str(e)}")
+                # Streamlit Community Cloudなど、popplerが利用できない環境では画像処理をスキップ
+                import streamlit as st
+                st.warning("⚠️ PDF画像処理機能が利用できません。テキスト抽出のみ実行します。")
+                return []  # 空の画像リストを返す
             else:
                 raise Exception(f"PDF画像抽出エラー: {str(e)}")
     
@@ -244,8 +247,13 @@ class PDFProcessor:
         
         # 画像抽出（ファイルを先頭に戻す）
         pdf_file.seek(0)
-        images = self.extract_images_from_pdf(pdf_file)
-        base64_images = self.images_to_base64(images)
+        try:
+            images = self.extract_images_from_pdf(pdf_file)
+            base64_images = self.images_to_base64(images) if images else []
+        except Exception:
+            # 画像処理でエラーが発生してもテキスト処理は継続
+            images = []
+            base64_images = []
         
         # トークン数チェック
         total_tokens = self.count_tokens(text_content)
