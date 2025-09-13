@@ -8,13 +8,13 @@ class PromptLoader:
     def __init__(self, prompts_dir: str = "prompts"):
         self.prompts_dir = prompts_dir
     
-    def load_prompt(self, agent_type: str, version: str = "latest") -> Dict[str, Any]:
+    def load_prompt(self, agent_type: str, version: str = "v1_0_0") -> Dict[str, Any]:
         """
         指定されたエージェントタイプとバージョンのプロンプトを読み込む
         
         Args:
             agent_type: エージェントタイプ（student, teacher, summarizer）
-            version: プロンプトバージョン（"latest" または "v1_0_0" など）
+            version: プロンプトバージョン（"v1_0_0", "v2_0_0" など）
             
         Returns:
             プロンプト設定の辞書
@@ -22,13 +22,7 @@ class PromptLoader:
         prompt_path = os.path.join(self.prompts_dir, agent_type, f"{version}.ini")
         
         if not os.path.exists(prompt_path):
-            # フォールバック: v1_0_0を試行
-            fallback_path = os.path.join(self.prompts_dir, agent_type, "v1_0_0.ini")
-            if version == "latest" and os.path.exists(fallback_path):
-                print(f"Warning: latest.ini not found, falling back to v1_0_0.ini for {agent_type}")
-                prompt_path = fallback_path
-            else:
-                raise FileNotFoundError(f"プロンプトファイルが見つかりません: {prompt_path}")
+            raise FileNotFoundError(f"プロンプトファイルが見つかりません: {prompt_path}")
         
         try:
             config = configparser.ConfigParser()
@@ -47,7 +41,7 @@ class PromptLoader:
         except Exception as e:
             raise RuntimeError(f"プロンプトファイルの読み込みエラー ({prompt_path}): {str(e)}")
     
-    def get_system_prompt(self, agent_type: str, version: str = "latest") -> str:
+    def get_system_prompt(self, agent_type: str, version: str = "v1_0_0") -> str:
         """
         システムプロンプトを構築して返す
         
@@ -115,7 +109,9 @@ class PromptLoader:
         
         versions = []
         for file in os.listdir(agent_dir):
-            if file.endswith('.ini') and file != 'latest.ini':
+            if file.endswith('.ini'):
                 versions.append(file.replace('.ini', ''))
         
-        return sorted(versions)
+        # v1_0_0を最初に来るようにソート
+        versions = sorted(versions, key=lambda x: (x != 'v1_0_0', x))
+        return versions

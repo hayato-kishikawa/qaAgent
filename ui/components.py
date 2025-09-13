@@ -27,6 +27,58 @@ class UIComponents:
         
         return uploaded_file
     
+    def render_prompt_version_settings(self) -> Dict[str, str]:
+        """プロンプトバージョン設定を描画"""
+        st.subheader("🎯 プロンプトバージョン設定")
+        
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
+        
+        versions = {}
+        agent_types = ["student", "teacher", "summarizer", "initial_summarizer"]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 学生エージェント
+            student_versions = prompt_loader.get_available_versions("student")
+            versions["student_version"] = st.selectbox(
+                "🎓 学生エージェント",
+                student_versions,
+                index=0,
+                key="student_version_select"
+            )
+            
+            # 先生エージェント
+            teacher_versions = prompt_loader.get_available_versions("teacher")  
+            versions["teacher_version"] = st.selectbox(
+                "👨‍🏫 先生エージェント",
+                teacher_versions,
+                index=0,
+                key="teacher_version_select"
+            )
+        
+        with col2:
+            # 要約エージェント
+            summarizer_versions = prompt_loader.get_available_versions("summarizer")
+            versions["summarizer_version"] = st.selectbox(
+                "📋 要約エージェント", 
+                summarizer_versions,
+                index=0,
+                key="summarizer_version_select"
+            )
+            
+            # 初期要約エージェント
+            initial_summarizer_versions = prompt_loader.get_available_versions("initial_summarizer")
+            versions["initial_summarizer_version"] = st.selectbox(
+                "📄 初期要約エージェント",
+                initial_summarizer_versions, 
+                index=0,
+                key="initial_summarizer_version_select"
+            )
+        
+        return versions
+
     def render_qa_settings(self) -> Dict[str, Any]:
         """Q&A設定を描画"""
         from services.openai_service import OpenAIService

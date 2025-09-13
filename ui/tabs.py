@@ -128,6 +128,10 @@ class UploadTab:
         if uploaded_file:
             st.success(f"✅ ファイルがアップロードされました: {uploaded_file.name}")
             
+            # プロンプトバージョン設定
+            prompt_versions = self.components.render_prompt_version_settings()
+            result.update(prompt_versions)
+            
             # Q&A設定
             qa_settings = self.components.render_qa_settings()
             result['qa_turns'] = qa_settings['qa_turns']
