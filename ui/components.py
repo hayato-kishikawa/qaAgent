@@ -189,6 +189,7 @@ class UIComponents:
         settings['enable_followup'] = st.checkbox(
             "フォローアップ質問を有効にする",
             value=True,
+            key="enable_followup_checkbox",
             help="回答が専門的すぎる場合に、より理解しやすい説明を求める追加質問を自動生成します"
         )
         
@@ -243,38 +244,6 @@ class UIComponents:
             st.warning(f"⚠️ 登録単語数({len(keywords)})がQ&Aターン数({qa_turns})以上です。単語を減らすかターン数を増やしてください。")
         elif keywords:
             st.success(f"✅ {len(keywords)}個の単語を登録: {', '.join(keywords[:3])}{'...' if len(keywords) > 3 else ''}")
-        
-        st.divider()
-        
-        # フォローアップ質問設定
-        st.markdown("**🔄 フォローアップ質問設定**")
-        settings['enable_followup'] = st.checkbox(
-            "フォローアップ質問を有効にする",
-            value=True,
-            help="回答が専門的すぎる場合に、より理解しやすい説明を求める追加質問を自動生成します"
-        )
-        
-        if settings['enable_followup']:
-            settings['followup_threshold'] = st.slider(
-                "専門度の閾値",
-                min_value=0.1,
-                max_value=0.9,
-                value=0.3,  # デフォルトを下げてフォローアップ頻度UP
-                step=0.1,
-                help="この値を超える専門度の回答に対してフォローアップ質問を生成します（低いほど多くのフォローアップが生成されます）"
-            )
-            
-            settings['max_followups'] = st.slider(
-                "最大フォローアップ数",
-                min_value=1,
-                max_value=10,  # 上限を増やす
-                value=5,       # デフォルトを増やす
-                step=1,
-                help="各セクションで生成するフォローアップ質問の最大数"
-            )
-        else:
-            settings['followup_threshold'] = 0.3  # 調整後のデフォルト値
-            settings['max_followups'] = 0
         
         return settings
     

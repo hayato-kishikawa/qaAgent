@@ -232,6 +232,7 @@ class QAApp:
             # 並列処理オプション
             use_parallel = st.checkbox("⚡ Q&A並列処理を有効にする", 
                                      value=True, 
+                                     key="use_parallel_processing",
                                      help="Q&A生成を並列処理して高速化します（推奨）")
             
             if use_parallel:
