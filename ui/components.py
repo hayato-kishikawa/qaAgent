@@ -29,55 +29,54 @@ class UIComponents:
     
     def render_prompt_version_settings(self) -> Dict[str, str]:
         """プロンプトバージョン設定を描画"""
-        st.subheader("🎯 プロンプトバージョン設定")
-        
-        from prompts.prompt_loader import PromptLoader
-        prompt_loader = PromptLoader()
-        
-        versions = {}
-        agent_types = ["student", "teacher", "summarizer", "initial_summarizer"]
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # 学生エージェント
-            student_versions = prompt_loader.get_available_versions("student")
-            versions["student_version"] = st.selectbox(
-                "🎓 学生エージェント",
-                student_versions,
-                index=0,
-                key="student_version_select"
-            )
-            
-            # 先生エージェント
-            teacher_versions = prompt_loader.get_available_versions("teacher")  
-            versions["teacher_version"] = st.selectbox(
-                "👨‍🏫 先生エージェント",
-                teacher_versions,
-                index=0,
-                key="teacher_version_select"
-            )
-        
-        with col2:
-            # 要約エージェント
-            summarizer_versions = prompt_loader.get_available_versions("summarizer")
-            versions["summarizer_version"] = st.selectbox(
-                "📋 要約エージェント", 
-                summarizer_versions,
-                index=0,
-                key="summarizer_version_select"
-            )
-            
-            # 初期要約エージェント
-            initial_summarizer_versions = prompt_loader.get_available_versions("initial_summarizer")
-            versions["initial_summarizer_version"] = st.selectbox(
-                "📄 初期要約エージェント",
-                initial_summarizer_versions, 
-                index=0,
-                key="initial_summarizer_version_select"
-            )
-        
-        return versions
+        with st.expander("🎯 プロンプトバージョン設定", expanded=False):
+            from prompts.prompt_loader import PromptLoader
+            prompt_loader = PromptLoader()
+
+            versions = {}
+            agent_types = ["student", "teacher", "summarizer", "initial_summarizer"]
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # 学生エージェント
+                student_versions = prompt_loader.get_available_versions("student")
+                versions["student_version"] = st.selectbox(
+                    "🎓 学生エージェント",
+                    student_versions,
+                    index=0,
+                    key="student_version_select"
+                )
+
+                # 先生エージェント
+                teacher_versions = prompt_loader.get_available_versions("teacher")
+                versions["teacher_version"] = st.selectbox(
+                    "👨‍🏫 先生エージェント",
+                    teacher_versions,
+                    index=0,
+                    key="teacher_version_select"
+                )
+
+            with col2:
+                # 要約エージェント
+                summarizer_versions = prompt_loader.get_available_versions("summarizer")
+                versions["summarizer_version"] = st.selectbox(
+                    "📋 要約エージェント",
+                    summarizer_versions,
+                    index=0,
+                    key="summarizer_version_select"
+                )
+
+                # 初期要約エージェント
+                initial_summarizer_versions = prompt_loader.get_available_versions("initial_summarizer")
+                versions["initial_summarizer_version"] = st.selectbox(
+                    "📄 初期要約エージェント",
+                    initial_summarizer_versions,
+                    index=0,
+                    key="initial_summarizer_version_select"
+                )
+
+            return versions
 
     def render_qa_settings(self) -> Dict[str, Any]:
         """Q&A設定を描画"""
@@ -98,57 +97,56 @@ class UIComponents:
         )
         
         # エージェント別モデル選択
-        st.markdown("**🤖 エージェント別モデル設定**")
-        
-        # GPT-5系のみに制限
-        gpt5_models = [
-            ('GPT-5', 'gpt-5'),
-            ('GPT-5 Mini', 'gpt-5-mini'), 
-            ('GPT-5 Nano', 'gpt-5-nano')
-        ]
-        
-        # 推奨モデル設定（GPT-5系）
-        recommended_models = {
-            'student': 'gpt-5-mini',       # 最新軽量モデル
-            'teacher': 'gpt-5',            # 最新最高性能モデル
-            'summarizer': 'gpt-5-nano'     # 最新超軽量モデル
-        }
-        
-        # 3つのカラムに分けて表示
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("**🎓 学生エージェント**")
-            st.caption("質問生成担当")
-            student_model = self._render_model_selector(
-                "student_model",
-                gpt5_models,
-                recommended_models['student'],
-                "質問生成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
-            )
-            settings['student_model'] = student_model
-        
-        with col2:
-            st.markdown("**👨‍🏫 教師エージェント**")  
-            st.caption("回答生成担当")
-            teacher_model = self._render_model_selector(
-                "teacher_model",
-                gpt5_models,
-                recommended_models['teacher'],
-                "回答生成に使用するモデル。複雑な内容に対応するため高性能モデルを推奨。"
-            )
-            settings['teacher_model'] = teacher_model
-        
-        with col3:
-            st.markdown("**📋 要約エージェント**")
-            st.caption("要約・レポート作成担当")
-            summarizer_model = self._render_model_selector(
-                "summarizer_model", 
-                gpt5_models,
-                recommended_models['summarizer'],
-                "要約とレポート作成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
+        with st.expander("🤖 エージェント別モデル設定", expanded=False):
+            # GPT-5系のみに制限
+            gpt5_models = [
+                ('GPT-5', 'gpt-5'),
+                ('GPT-5 Mini', 'gpt-5-mini'),
+                ('GPT-5 Nano', 'gpt-5-nano')
+            ]
+
+            # 推奨モデル設定（GPT-5系）
+            recommended_models = {
+                'student': 'gpt-5-mini',       # 最新軽量モデル
+                'teacher': 'gpt-5',            # 最新最高性能モデル
+                'summarizer': 'gpt-5-nano'     # 最新超軽量モデル
+            }
+
+            # 3つのカラムに分けて表示
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown("**🎓 学生エージェント**")
+                st.caption("質問生成担当")
+                student_model = self._render_model_selector(
+                    "student_model",
+                    gpt5_models,
+                    recommended_models['student'],
+                    "質問生成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
                 )
-            settings['summarizer_model'] = summarizer_model
+                settings['student_model'] = student_model
+
+            with col2:
+                st.markdown("**👨‍🏫 教師エージェント**")
+                st.caption("回答生成担当")
+                teacher_model = self._render_model_selector(
+                    "teacher_model",
+                    gpt5_models,
+                    recommended_models['teacher'],
+                    "回答生成に使用するモデル。複雑な内容に対応するため高性能モデルを推奨。"
+                )
+                settings['teacher_model'] = teacher_model
+
+            with col3:
+                st.markdown("**📋 要約エージェント**")
+                st.caption("要約・レポート作成担当")
+                summarizer_model = self._render_model_selector(
+                    "summarizer_model",
+                    gpt5_models,
+                    recommended_models['summarizer'],
+                    "要約とレポート作成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
+                    )
+                settings['summarizer_model'] = summarizer_model
                     
         # フォローアップ設定
         st.divider()
