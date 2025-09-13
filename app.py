@@ -3,6 +3,9 @@ import asyncio
 from typing import Dict, Any, Optional
 import traceback
 
+# 認証のインポート
+from auth import check_password, logout
+
 # 設定とサービスのインポート
 from config.settings import Settings
 from services.pdf_processor import PDFProcessor
@@ -66,6 +69,16 @@ class QAApp:
             layout=self.settings.LAYOUT
         )
         
+        # 認証チェック
+        if not check_password():
+            return
+        
+        # ログアウトボタンをサイドバーに追加
+        with st.sidebar:
+            st.divider()
+            if st.button("🔓 ログアウト"):
+                logout()
+        
         # 初期化エラーチェック
         if self.initialization_error:
             st.error(self.initialization_error)
@@ -85,27 +98,44 @@ class QAApp:
     
     def _render_main_content(self):
         """メインコンテンツを描画"""
-        # セッション状態を取得
-        current_step = SessionManager.get_step()
+        # メインタブ切り替え
+        main_tab1, main_tab2 = st.tabs(["🚀 Q&Aセッション", "🎯 プロンプト編集"])
         
-        try:
-            if current_step == "upload":
-                self._render_upload_step()
-            elif current_step == "processing":
-                self._render_processing_step()
-            elif current_step == "qa" or current_step == "completed":
-                self._render_results_step()
+        with main_tab1:
+            # セッション状態を取得
+            current_step = SessionManager.get_step()
             
-            # タブを常に表示（データがある場合、ただし完了時は重複を避ける）
-            if (current_step != "completed" and 
-                (SessionManager.get_summary() or SessionManager.get_qa_pairs() or SessionManager.get_final_report())):
-                st.divider()
-                st.subheader("📊 処理結果")
-                self._render_results_step()
+            try:
+                if current_step == "upload":
+                    self._render_upload_step()
+                elif current_step == "processing":
+                    self._render_processing_step()
+                elif current_step == "qa" or current_step == "completed":
+                    self._render_results_step()
                 
+                # タブを常に表示（データがある場合、ただし完了時は重複を避ける）
+                if (current_step != "completed" and 
+                    (SessionManager.get_summary() or SessionManager.get_qa_pairs() or SessionManager.get_final_report())):
+                    st.divider()
+                    st.subheader("📊 処理結果")
+                    self._render_results_step()
+            
+            except Exception as e:
+                st.error(f"アプリケーションエラー: {str(e)}")
+                st.code(traceback.format_exc())
+        
+        with main_tab2:
+            # プロンプト編集タブ
+            self._render_prompt_editor_tab()
+    
+    def _render_prompt_editor_tab(self):
+        """プロンプト編集タブを描画"""
+        try:
+            from ui.prompt_editor import PromptEditor
+            prompt_editor = PromptEditor()
+            prompt_editor.render_prompt_editor_tab()
         except Exception as e:
-            st.error(f"アプリケーションエラー: {str(e)}")
-            st.code(traceback.format_exc())
+            st.error(f"プロンプトエディタエラー: {str(e)}")
     
     def _render_upload_step(self):
         """アップロード・設定ステップを描画"""
@@ -127,7 +157,12 @@ class QAApp:
                 'summarizer_model': upload_result['summarizer_model'],
                 'enable_followup': upload_result['enable_followup'],
                 'followup_threshold': upload_result['followup_threshold'],
-                'max_followups': upload_result['max_followups']
+                'max_followups': upload_result['max_followups'],
+                'target_keywords': upload_result.get('target_keywords', []),
+                'student_version': upload_result.get('student_version', 'v1_0_0'),
+                'teacher_version': upload_result.get('teacher_version', 'v1_0_0'),
+                'summarizer_version': upload_result.get('summarizer_version', 'v1_0_0'),
+                'initial_summarizer_version': upload_result.get('initial_summarizer_version', 'v1_0_0')
             }
             
             # 処理を開始
@@ -849,18 +884,22 @@ class QAApp:
             return f"要約生成エラー: {str(e)}"
     
     def _configure_agent_models(self, processing_settings: Dict[str, Any]):
-        """各エージェントのモデルを個別設定"""
-        # 学生エージェントのモデル設定
+        """各エージェントのモデルとプロンプトバージョンを個別設定"""
+        # 学生エージェントの設定
         self.student_agent.set_model(processing_settings['student_model'])
+        self.student_agent.update_prompt_version(processing_settings.get('student_version', 'v1_0_0'))
         
-        # 教師エージェントのモデル設定  
+        # 教師エージェントの設定
         self.teacher_agent.set_model(processing_settings['teacher_model'])
+        self.teacher_agent.update_prompt_version(processing_settings.get('teacher_version', 'v1_0_0'))
         
-        # 初期要約エージェントのモデル設定
+        # 初期要約エージェントの設定
         self.initial_summarizer_agent.set_model(processing_settings['summarizer_model'])
+        self.initial_summarizer_agent.update_prompt_version(processing_settings.get('initial_summarizer_version', 'v1_0_0'))
         
-        # 最終レポート要約エージェントのモデル設定
+        # 最終レポート要約エージェントの設定
         self.summarizer_agent.set_model(processing_settings['summarizer_model'])
+        self.summarizer_agent.update_prompt_version(processing_settings.get('summarizer_version', 'v1_0_0'))
     
     async def _run_parallel_qa_session(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
         """並列処理を活用したQ&Aセッション実行"""
