@@ -180,7 +180,40 @@ class UIComponents:
                     st.rerun()
                     
         # フォローアップ設定
+        st.divider()
+        st.markdown("**🔄 フォローアップ質問設定**")
         
+        settings['enable_followup'] = st.checkbox(
+            "フォローアップ質問を有効にする",
+            value=True,
+            help="回答が専門的すぎる場合に、より理解しやすい説明を求める追加質問を自動生成します"
+        )
+        
+        if settings['enable_followup']:
+            # 複雑さ閾値の設定
+            settings['followup_threshold'] = st.slider(
+                "フォローアップ質問の発動閾値", 
+                min_value=0.1,
+                max_value=1.0,
+                value=0.3,
+                step=0.1,
+                help="回答の複雑さがこの閾値を超えた場合にフォローアップ質問を生成します"
+            )
+            
+            # 最大フォローアップ数の設定
+            settings['max_followups'] = st.slider(
+                "最大フォローアップ質問数",
+                min_value=0,
+                max_value=3,
+                value=1,
+                step=1,
+                help="1つのQ&Aペアに対する最大フォローアップ質問数"
+            )
+        else:
+            # フォローアップ無効時のデフォルト値
+            settings['followup_threshold'] = 0.3  # 調整後のデフォルト値
+            settings['max_followups'] = 0
+
         st.divider()
         
         # 単語登録設定
