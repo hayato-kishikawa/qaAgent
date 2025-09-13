@@ -148,7 +148,7 @@ class UIComponents:
                 recommended_models['summarizer'],
                 "要約とレポート作成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
                 )
-                settings['summarizer_model'] = summarizer_model
+            settings['summarizer_model'] = summarizer_model
                 
             # 一括設定オプション
             st.divider()
