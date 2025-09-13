@@ -210,3 +210,6 @@ __marimo__/
 /logs
 /agent_farm_env
 /docs
+
+# Streamlit secrets (never commit these)
+.streamlit/secrets.toml
