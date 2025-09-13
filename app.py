@@ -73,11 +73,9 @@ class QAApp:
         if not check_password():
             return
         
-        # ログアウトボタンをサイドバーに追加
-        with st.sidebar:
-            st.divider()
-            if st.button("🔓 ログアウト"):
-                logout()
+        # サイドバーで設定を描画（ログアウトボタン含む）
+        sidebar_settings = self.components.render_sidebar_settings()
+        self._cached_sidebar_settings = sidebar_settings
         
         # 初期化エラーチェック
         if self.initialization_error:
@@ -135,7 +133,9 @@ class QAApp:
     
     def _render_upload_step(self):
         """アップロード・設定ステップを描画"""
-        upload_result = self.upload_tab.render_upload_section()
+        # サイドバー設定を取得（既に描画済み）
+        sidebar_settings = getattr(self, '_cached_sidebar_settings', {})
+        upload_result = self.upload_tab.render_upload_section(sidebar_settings)
         
         if upload_result['start_processing'] and upload_result['uploaded_file']:
             # ファイル検証

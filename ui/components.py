@@ -14,6 +14,206 @@ class UIComponents:
         """)
         st.divider()
     
+    def render_sidebar_settings(self) -> Dict[str, Any]:
+        """サイドバーに設定を描画"""
+        with st.sidebar:
+            st.header("⚙️ 設定")
+
+            # プロンプトバージョン設定
+            st.subheader("🎯 プロンプト設定")
+            prompt_versions = self.render_prompt_version_settings_sidebar()
+
+            st.divider()
+
+            # Q&A設定
+            st.subheader("💬 Q&A設定")
+            qa_settings = self.render_qa_settings_sidebar()
+
+            st.divider()
+
+            # ログアウトボタン
+            if st.button("🔓 ログアウト", use_container_width=True):
+                from auth import logout
+                logout()
+
+            # 設定を統合して返す
+            settings = {**prompt_versions, **qa_settings}
+            return settings
+
+    def render_prompt_version_settings_sidebar(self) -> Dict[str, str]:
+        """サイドバー用プロンプトバージョン設定を描画"""
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
+
+        versions = {}
+
+        # 学生エージェント
+        student_versions = prompt_loader.get_available_versions("student")
+        versions["student_version"] = st.selectbox(
+            "🎓 学生",
+            student_versions,
+            index=0,
+            key="sidebar_student_version_select"
+        )
+
+        # 先生エージェント
+        teacher_versions = prompt_loader.get_available_versions("teacher")
+        versions["teacher_version"] = st.selectbox(
+            "👨‍🏫 先生",
+            teacher_versions,
+            index=0,
+            key="sidebar_teacher_version_select"
+        )
+
+        # 要約エージェント
+        summarizer_versions = prompt_loader.get_available_versions("summarizer")
+        versions["summarizer_version"] = st.selectbox(
+            "📋 要約",
+            summarizer_versions,
+            index=0,
+            key="sidebar_summarizer_version_select"
+        )
+
+        # 初期要約エージェント
+        initial_summarizer_versions = prompt_loader.get_available_versions("initial_summarizer")
+        versions["initial_summarizer_version"] = st.selectbox(
+            "📄 初期要約",
+            initial_summarizer_versions,
+            index=0,
+            key="sidebar_initial_summarizer_version_select"
+        )
+
+        return versions
+
+    def render_qa_settings_sidebar(self) -> Dict[str, Any]:
+        """サイドバー用Q&A設定を描画"""
+        settings = {}
+
+        # Q&Aターン数設定
+        settings['qa_turns'] = st.slider(
+            "Q&A数",
+            min_value=1,
+            max_value=20,
+            value=10,
+            step=1,
+            key="sidebar_qa_turns"
+        )
+
+        # エージェント別モデル選択
+        st.markdown("**🤖 モデル設定**")
+
+        # GPT-5系のみに制限
+        gpt5_models = [
+            ('GPT-5', 'gpt-5'),
+            ('GPT-5 Mini', 'gpt-5-mini'),
+            ('GPT-5 Nano', 'gpt-5-nano')
+        ]
+
+        # 推奨モデル設定
+        recommended_models = {
+            'student': 'gpt-5-mini',
+            'teacher': 'gpt-5',
+            'summarizer': 'gpt-5-nano'
+        }
+
+        # 学生エージェントモデル
+        student_model = self._render_model_selector_sidebar(
+            "sidebar_student_model",
+            gpt5_models,
+            recommended_models['student'],
+            "🎓 学生モデル"
+        )
+        settings['student_model'] = student_model
+
+        # 教師エージェントモデル
+        teacher_model = self._render_model_selector_sidebar(
+            "sidebar_teacher_model",
+            gpt5_models,
+            recommended_models['teacher'],
+            "👨‍🏫 教師モデル"
+        )
+        settings['teacher_model'] = teacher_model
+
+        # 要約エージェントモデル
+        summarizer_model = self._render_model_selector_sidebar(
+            "sidebar_summarizer_model",
+            gpt5_models,
+            recommended_models['summarizer'],
+            "📋 要約モデル"
+        )
+        settings['summarizer_model'] = summarizer_model
+
+        # フォローアップ設定
+        st.markdown("**🔄 フォローアップ**")
+        settings['enable_followup'] = st.checkbox(
+            "有効化",
+            value=True,
+            key="sidebar_enable_followup_checkbox"
+        )
+
+        if settings['enable_followup']:
+            settings['followup_threshold'] = st.slider(
+                "閾値",
+                min_value=0.1,
+                max_value=1.0,
+                value=0.3,
+                step=0.1,
+                key="sidebar_followup_threshold"
+            )
+
+            settings['max_followups'] = st.slider(
+                "最大数",
+                min_value=0,
+                max_value=3,
+                value=1,
+                step=1,
+                key="sidebar_max_followups"
+            )
+        else:
+            settings['followup_threshold'] = 0.3
+            settings['max_followups'] = 0
+
+        # 重要単語登録
+        st.markdown("**📝 重要単語**")
+        keyword_input = st.text_input(
+            "単語入力",
+            placeholder="カンマ区切り",
+            key="sidebar_keyword_input"
+        )
+
+        keywords = []
+        if keyword_input.strip():
+            keywords = [kw.strip() for kw in keyword_input.split(',') if kw.strip()]
+
+        settings['target_keywords'] = keywords
+
+        if keywords and len(keywords) >= settings.get('qa_turns', 10):
+            st.warning("⚠️ 単語数 > Q&A数")
+        elif keywords:
+            st.success(f"✅ {len(keywords)}個登録")
+
+        return settings
+
+    def _render_model_selector_sidebar(self, key: str, model_options: list, default_model: str, label: str) -> str:
+        """サイドバー用モデル選択セレクトボックスを描画"""
+        current_value = st.session_state.get(key, default_model)
+
+        default_index = 0
+        for i, (name, model_id) in enumerate(model_options):
+            if model_id == current_value:
+                default_index = i
+                break
+
+        selected_model_name = st.selectbox(
+            label,
+            options=[name for name, _ in model_options],
+            index=default_index,
+            key=key
+        )
+
+        selected_model_id = next(model_id for name, model_id in model_options if name == selected_model_name)
+        return selected_model_id
+
     @staticmethod
     def render_file_uploader() -> Optional[Any]:
         """ファイルアップローダーを描画"""
