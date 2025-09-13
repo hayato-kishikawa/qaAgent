@@ -113,12 +113,8 @@ class QAApp:
                 elif current_step == "qa" or current_step == "completed":
                     self._render_results_step()
                 
-                # タブを常に表示（データがある場合、ただし完了時は重複を避ける）
-                if (current_step != "completed" and 
-                    (SessionManager.get_summary() or SessionManager.get_qa_pairs() or SessionManager.get_final_report())):
-                    st.divider()
-                    st.subheader("📊 処理結果")
-                    self._render_results_step()
+                # 処理中の進捗表示のみ（完了後はタブで確認）
+                pass
             
             except Exception as e:
                 st.error(f"アプリケーションエラー: {str(e)}")
