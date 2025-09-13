@@ -149,38 +149,38 @@ class UIComponents:
                 "要約とレポート作成に使用するモデル。軽量モデルでも十分な性能を発揮します。"
                 )
             settings['summarizer_model'] = summarizer_model
-                
-            # 一括設定オプション
-            st.divider()
-            st.markdown("**⚡ 一括設定**")
-            col_preset1, col_preset2, col_preset3 = st.columns(3)
-            
-            with col_preset1:
-                if st.button("💰 コスト重視", help="全エージェントを超軽量モデル（GPT-5 Nano）に設定"):
-                    # セッション状態をクリアして再読み込み
-                    for key in ['student_model', 'teacher_model', 'summarizer_model']:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.session_state['preset_mode'] = 'cost'
-                    st.rerun()
-            
-            with col_preset2:
-                if st.button("⚖️ バランス重視", help="最新モデルで最適バランス（推奨）"):
-                    # セッション状態をクリアして再読み込み
-                    for key in ['student_model', 'teacher_model', 'summarizer_model']:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.session_state['preset_mode'] = 'balanced'
-                    st.rerun()
-            
-            with col_preset3:
-                if st.button("🚀 性能重視", help="全エージェントを最高性能モデル（GPT-5）に設定"):
-                    # セッション状態をクリアして再読み込み
-                    for key in ['student_model', 'teacher_model', 'summarizer_model']:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.session_state['preset_mode'] = 'performance'
-                    st.rerun()
+        
+        # 一括設定オプション（全幅に配置）
+        st.divider()
+        st.markdown("**⚡ 一括設定**")
+        col_preset1, col_preset2, col_preset3 = st.columns(3)
+        
+        with col_preset1:
+            if st.button("💰 コスト重視", help="全エージェントを超軽量モデル（GPT-5 Nano）に設定", use_container_width=True):
+                # セッション状態をクリアして再読み込み
+                for key in ['student_model', 'teacher_model', 'summarizer_model']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.session_state['preset_mode'] = 'cost'
+                st.rerun()
+        
+        with col_preset2:
+            if st.button("⚖️ バランス重視", help="最新モデルで最適バランス（推奨）", use_container_width=True):
+                # セッション状態をクリアして再読み込み
+                for key in ['student_model', 'teacher_model', 'summarizer_model']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.session_state['preset_mode'] = 'balanced'
+                st.rerun()
+        
+        with col_preset3:
+            if st.button("🚀 性能重視", help="全エージェントを最高性能モデル（GPT-5）に設定", use_container_width=True):
+                # セッション状態をクリアして再読み込み
+                for key in ['student_model', 'teacher_model', 'summarizer_model']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.session_state['preset_mode'] = 'performance'
+                st.rerun()
                     
         # フォローアップ設定
         st.divider()
