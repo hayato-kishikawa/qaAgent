@@ -282,22 +282,31 @@ class UIComponents:
 
     def _render_model_selector_sidebar(self, key: str, model_options: list, default_model: str, label: str) -> str:
         """サイドバー用モデル選択セレクトボックスを描画"""
-        current_value = st.session_state.get(key, default_model)
+        # セッション状態から現在の値を取得（初回はデフォルト値）
+        if key not in st.session_state:
+            st.session_state[key] = default_model
 
+        current_value = st.session_state[key]
+
+        # 現在の値に対応するインデックスを取得
         default_index = 0
         for i, (name, model_id) in enumerate(model_options):
             if model_id == current_value:
                 default_index = i
                 break
 
+        # selectboxで選択されたモデル名を取得
         selected_model_name = st.selectbox(
             label,
             options=[name for name, _ in model_options],
             index=default_index,
-            key=key
+            key=f"{key}_selectbox"  # キーの重複を避けるため
         )
 
+        # 選択されたモデルIDを取得してセッション状態を更新
         selected_model_id = next(model_id for name, model_id in model_options if name == selected_model_name)
+        st.session_state[key] = selected_model_id
+
         return selected_model_id
 
     @staticmethod
