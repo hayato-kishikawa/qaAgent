@@ -47,10 +47,11 @@ class TabManager:
     def _render_final_report_tab(self, session_data: Dict[str, Any]):
         """最終レポートタブの内容"""
         final_report = session_data.get('final_report', '')
-        
+        quick_mode = session_data.get('quick_mode', False)
+
         if final_report:
             self.components.render_final_report(final_report)
-            
+
             # 統計情報があれば表示
             stats = session_data.get('statistics', {})
             if stats:
@@ -59,9 +60,39 @@ class TabManager:
         else:
             qa_completed = session_data.get('qa_completed', False)
             if qa_completed:
-                st.info("🔄 最終レポートを生成中です...")
+                if quick_mode:
+                    # Quickモードの場合、即座にレポートを生成
+                    summary = session_data.get('summary', '')
+                    qa_pairs = session_data.get('qa_pairs', [])
+                    document_info = session_data.get('document_data', {})
+
+                    if summary and qa_pairs:
+                        quick_report = self.components.generate_quick_report(summary, qa_pairs, document_info)
+                        # セッションにレポートを保存
+                        st.session_state['final_report'] = quick_report
+                        st.session_state['qa_completed'] = True
+
+                        # レポートを表示
+                        self.components.render_final_report(quick_report)
+
+                        # 統計情報を生成・表示
+                        quick_stats = {
+                            'qa_count': len(qa_pairs),
+                            'document_pages': document_info.get('page_count', 0),
+                            'document_tokens': document_info.get('total_tokens', 0),
+                            'duration_seconds': 0  # Quickモードは即座に完了
+                        }
+                        st.divider()
+                        self.components.render_statistics(quick_stats)
+                    else:
+                        st.info("💨 Quickモード: レポート生成準備中...")
+                else:
+                    st.info("🔄 最終レポートを生成中です...")
             else:
-                st.info("📋 Q&Aセッション完了後に最終レポートが生成されます。")
+                if quick_mode:
+                    st.info("📋 Q&Aセッション完了後に簡易レポートが即座に生成されます。")
+                else:
+                    st.info("📋 Q&Aセッション完了後に最終レポートが生成されます。")
     
     def _render_qa_pairs(self, qa_pairs: List[Dict[str, Any]]):
         """Q&Aペアのリストを表示"""
@@ -154,12 +185,94 @@ class UploadTab:
                     st.session_state['reset_requested'] = True
                     st.rerun()
         else:
-            # ファイルがアップロードされていない場合の説明
-            st.info("📄 PDFファイルをアップロードしてください")
-            st.markdown("**使用方法:**")
-            st.markdown("1. 左側のサイドバーで各種設定を確認・調整")
-            st.markdown("2. PDFファイルをアップロード")
-            st.markdown("3. 実行開始ボタンでQ&Aセッションを開始")
+            # ファイルがアップロードされていない場合の詳細説明
+            st.info("📄 PDFファイルをアップロードして、AIエージェントによる文書理解セッションを開始してください")
+
+            # アプリの特徴
+            st.markdown("### ✨ このアプリの特徴")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**🤖 3つのAIエージェント**")
+                st.markdown("- 🎓 **学生エージェント**: 文書について質問を生成")
+                st.markdown("- 👨‍🏫 **教師エージェント**: 詳細で分かりやすい回答を提供")
+                st.markdown("- 📋 **要約エージェント**: 文書要約と最終レポート作成")
+
+            with col2:
+                st.markdown("**📊 学習効果**")
+                st.markdown("- 💡 **理解促進**: Q&A形式で段階的に理解")
+                st.markdown("- 🔄 **フォローアップ**: 難しい回答には追加説明")
+                st.markdown("- 📝 **レポート**: 学習内容をMarkdown形式で整理")
+
+            st.divider()
+
+            # 使用方法
+            st.markdown("### 🚀 使用方法")
+
+            steps_col1, steps_col2, steps_col3 = st.columns(3)
+
+            with steps_col1:
+                st.markdown("""
+                **ステップ1: 設定確認**
+                左サイドバーで設定を確認・調整
+
+                **ステップ2: ファイル選択**
+                PDFファイルをドラッグ&ドロップ
+
+                **ステップ3: 実行開始**
+                🚀ボタンでQ&Aセッション開始
+                """)
+
+            with steps_col2:
+                st.markdown("**📋 対応ファイル**")
+                st.markdown("- **形式**: PDFファイルのみ")
+                st.markdown("- **サイズ**: 最大50MB")
+                st.markdown("- **内容**: 論文、レポート、マニュアル等の文書")
+                st.markdown("- **言語**: 日本語・英語対応")
+
+            with steps_col3:
+                st.markdown("**⚙️ 主な設定項目**")
+                st.markdown("- **Q&A数**: 1-20回（推奨: 10回）")
+                st.markdown("- **モデル**: GPT-5系から選択可能")
+                st.markdown("- **重要単語**: 優先的に質問生成する単語指定")
+
+            st.divider()
+
+            # 利用シーン
+            st.markdown("### 💼 こんな場面で活用")
+            scenario_col1, scenario_col2, scenario_col3 = st.columns(3)
+
+            with scenario_col1:
+                st.markdown("""
+                **📚 学習・研究**
+                - 論文の理解
+                - 専門書の要点整理
+                - 研究資料の分析
+                """)
+
+            with scenario_col2:
+                st.markdown("""
+                **💼 業務効率化**
+                - 報告書の要約
+                - マニュアルの理解
+                - 技術資料の習得
+                """)
+
+            with scenario_col3:
+                st.markdown("""
+                **🎯 試験対策**
+                - 教材の重要ポイント抽出
+                - 問題集作成の参考
+                - 復習用資料の作成
+                """)
+
+            # 注意事項
+            st.markdown("### ⚠️ ご利用上の注意")
+            st.markdown("""
+            - 処理時間は文書の長さとQ&A数に比例します（目安: 10Q&Aで3-5分）
+            - 専門的な内容ほど、より詳細な説明が生成されます
+            - 生成されるQ&Aは学習効果を重視した構成になっています
+            """)
 
         return result
 

@@ -158,7 +158,8 @@ class QAApp:
                 'student_version': upload_result.get('student_version', 'v1_0_0'),
                 'teacher_version': upload_result.get('teacher_version', 'v1_0_0'),
                 'summarizer_version': upload_result.get('summarizer_version', 'v1_0_0'),
-                'initial_summarizer_version': upload_result.get('initial_summarizer_version', 'v1_0_0')
+                'initial_summarizer_version': upload_result.get('initial_summarizer_version', 'v1_0_0'),
+                'quick_mode': upload_result.get('quick_mode', False)
             }
             
             # 処理を開始
@@ -245,11 +246,23 @@ class QAApp:
             st.success("✅ 要約・Q&Aセッション完了")
             
             # ステップ4: 最終レポート生成
-            with st.spinner("📊 最終レポートを作成中..."):
-                final_report = asyncio.run(self._generate_final_report(pdf_data['text_content'], qa_pairs, initial_summary))
-                SessionManager.set_final_report(final_report)
-            
-            st.success("✅ 処理完了！下のタブで結果をご確認ください")
+            quick_mode = processing_settings.get('quick_mode', False)
+            if quick_mode:
+                # Quickモードの場合は簡易レポートを生成
+                with st.spinner("💨 簡易レポートを作成中..."):
+                    document_info = SessionManager.get_document_data()
+                    quick_report = UIComponents.generate_quick_report(initial_summary, qa_pairs, document_info)
+                    SessionManager.set_final_report(quick_report)
+                st.success("✅ 処理完了！Quickモードで簡易レポートを生成しました")
+            else:
+                # 通常モードの場合はAI生成レポート
+                with st.spinner("📊 最終レポートを作成中..."):
+                    final_report = asyncio.run(self._generate_final_report(pdf_data['text_content'], qa_pairs, initial_summary))
+                    SessionManager.set_final_report(final_report)
+                st.success("✅ 処理完了！下のタブで結果をご確認ください")
+
+            # Quickモード情報をセッションに保存
+            st.session_state['quick_mode'] = quick_mode
             SessionManager.stop_processing()
             SessionManager.set_step("completed")
             

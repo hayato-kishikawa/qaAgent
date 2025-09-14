@@ -1,8 +1,10 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 # .envファイルから環境変数を読み込み
-load_dotenv()
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(env_path)
 
 class Settings:
     """アプリケーション設定クラス"""
@@ -26,8 +28,8 @@ class Settings:
     MAX_FOLLOWUP_QUESTIONS = 3
     
     # Streamlit設定
-    PAGE_TITLE = "AI文書要約・Q&Aアプリ"
-    PAGE_ICON = "🤖"
+    PAGE_TITLE = "StudyMate AI - 文書学習アシスタント"
+    PAGE_ICON = "🎓"
     LAYOUT = "wide"
     
     # プロンプト設定

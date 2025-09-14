@@ -8,9 +8,9 @@ class UIComponents:
     @staticmethod
     def render_header():
         """アプリケーションヘッダーを描画"""
-        st.title("🤖 AI文書要約・Q&Aアプリ")
+        st.title("🎓 StudyMate AI - 文書学習アシスタント")
         st.markdown("""
-        このアプリは、PDFドキュメントをアップロードして、3つのAIエージェントによる要約とQ&Aセッションを通じて理解を深めることができます。
+        AIエージェントがあなたの学習パートナーになります。PDFをアップロードして、先生と生徒の対話形式で効果的に理解を深めましょう。
         """)
         st.divider()
     
@@ -19,15 +19,39 @@ class UIComponents:
         with st.sidebar:
             st.header("⚙️ 設定")
 
-            # プロンプトバージョン設定
-            st.subheader("🎯 プロンプト設定")
-            prompt_versions = self.render_prompt_version_settings_sidebar()
+            # 処理モード設定
+            st.subheader("⚡ 処理モード")
+            processing_settings = self.render_processing_mode_sidebar()
 
             st.divider()
 
             # Q&A設定
             st.subheader("💬 Q&A設定")
-            qa_settings = self.render_qa_settings_sidebar()
+            qa_settings = self.render_basic_qa_settings_sidebar()
+
+            st.divider()
+
+            # フォローアップ設定
+            st.subheader("🔄 フォローアップ")
+            followup_settings = self.render_followup_settings_sidebar()
+
+            st.divider()
+
+            # 重要単語設定
+            st.subheader("📝 重要単語設定")
+            keyword_settings = self.render_keyword_settings_sidebar(qa_settings.get('qa_turns', 10))
+
+            st.divider()
+
+            # モデル設定
+            st.subheader("🤖 モデル設定")
+            model_settings = self.render_model_settings_sidebar()
+
+            st.divider()
+
+            # プロンプトバージョン設定
+            st.subheader("🎯 プロンプト設定")
+            prompt_versions = self.render_prompt_version_settings_sidebar()
 
             st.divider()
 
@@ -37,7 +61,7 @@ class UIComponents:
                 logout()
 
             # 設定を統合して返す
-            settings = {**prompt_versions, **qa_settings}
+            settings = {**processing_settings, **qa_settings, **followup_settings, **keyword_settings, **model_settings, **prompt_versions}
             return settings
 
     def render_prompt_version_settings_sidebar(self) -> Dict[str, str]:
@@ -85,8 +109,25 @@ class UIComponents:
 
         return versions
 
-    def render_qa_settings_sidebar(self) -> Dict[str, Any]:
-        """サイドバー用Q&A設定を描画"""
+    def render_processing_mode_sidebar(self) -> Dict[str, Any]:
+        """サイドバー用処理モード設定を描画"""
+        settings = {}
+
+        # Quickモード設定
+        settings['quick_mode'] = st.checkbox(
+            "Quickモード（高速処理）",
+            value=False,
+            key="sidebar_quick_mode",
+            help="最終レポートをAI生成せず、要約とQ&Aを単純結合して高速化します"
+        )
+
+        if settings['quick_mode']:
+            st.info("💨 Quickモード: 最終レポートは簡易形式で即座に生成されます")
+
+        return settings
+
+    def render_basic_qa_settings_sidebar(self) -> Dict[str, Any]:
+        """サイドバー用基本Q&A設定を描画"""
         settings = {}
 
         # Q&Aターン数設定
@@ -99,8 +140,101 @@ class UIComponents:
             key="sidebar_qa_turns"
         )
 
-        # エージェント別モデル選択
-        st.markdown("**🤖 モデル設定**")
+        return settings
+
+    def render_followup_settings_sidebar(self) -> Dict[str, Any]:
+        """サイドバー用フォローアップ設定を描画"""
+        settings = {}
+
+        settings['enable_followup'] = st.checkbox(
+            "有効化",
+            value=True,
+            key="sidebar_enable_followup_checkbox"
+        )
+
+        if settings['enable_followup']:
+            settings['followup_threshold'] = st.slider(
+                "閾値",
+                min_value=0.1,
+                max_value=1.0,
+                value=0.3,
+                step=0.1,
+                key="sidebar_followup_threshold"
+            )
+
+            settings['max_followups'] = st.slider(
+                "最大数",
+                min_value=0,
+                max_value=3,
+                value=1,
+                step=1,
+                key="sidebar_max_followups"
+            )
+        else:
+            settings['followup_threshold'] = 0.3
+            settings['max_followups'] = 0
+
+        return settings
+
+    def render_keyword_settings_sidebar(self, qa_turns: int) -> Dict[str, Any]:
+        """サイドバー用重要単語設定を描画"""
+        settings = {}
+
+        # 説明を展開可能にする
+        with st.expander("💡 重要単語機能について", expanded=False):
+            st.markdown("""
+            **🎯 機能概要**
+            - 指定した単語について**優先的に質問を生成**します
+            - 文書中の重要なキーワードを確実に学習できます
+            - 専門用語や重要概念の理解を深めるのに効果的です
+
+            **📋 使用例**
+            - 論文: `機械学習, ニューラルネットワーク, 深層学習`
+            - ビジネス文書: `ROI, KPI, ステークホルダー`
+            - 技術文書: `API, データベース, セキュリティ`
+
+            **⚠️ 注意点**
+            - 単語数はQ&A数より少なくしてください
+            - 文書に含まれていない単語は効果がありません
+            - カンマで区切って複数指定可能です
+            """)
+
+        keyword_input = st.text_input(
+            "重要単語を入力（カンマ区切り）",
+            placeholder="例: 機械学習, ニューラルネットワーク, 深層学習",
+            key="sidebar_keyword_input",
+            help="これらの単語について優先的に質問が生成されます。複数の単語はカンマで区切ってください。"
+        )
+
+        keywords = []
+        if keyword_input.strip():
+            keywords = [kw.strip() for kw in keyword_input.split(',') if kw.strip()]
+
+        settings['target_keywords'] = keywords
+
+        # バリデーションとフィードバック
+        if keywords and len(keywords) >= qa_turns:
+            st.error(f"❌ 単語数({len(keywords)})がQ&A数({qa_turns})以上です。単語を{len(keywords) - qa_turns + 1}個減らすか、Q&A数を増やしてください。")
+        elif keywords and len(keywords) > qa_turns * 0.8:  # 80%を超えた場合の警告
+            st.warning(f"⚠️ 単語数({len(keywords)})がQ&A数({qa_turns})の80%を超えています。他の内容についての質問が少なくなる可能性があります。")
+        elif keywords:
+            keyword_preview = ', '.join(keywords[:3])
+            if len(keywords) > 3:
+                keyword_preview += f" など{len(keywords)}個"
+            st.success(f"✅ 重要単語を{len(keywords)}個登録: {keyword_preview}")
+
+            # 推奨バランス表示
+            recommended_ratio = min(len(keywords) / qa_turns, 0.5)
+            if recommended_ratio <= 0.3:
+                st.info(f"💡 良いバランスです。全Q&Aの約{recommended_ratio*100:.0f}%が重要単語関連になります。")
+        else:
+            st.info("💡 重要単語未設定。文書全体からバランスよく質問を生成します。")
+
+        return settings
+
+    def render_model_settings_sidebar(self) -> Dict[str, Any]:
+        """サイドバー用モデル設定を描画"""
+        settings = {}
 
         # GPT-5系のみに制限
         gpt5_models = [
@@ -143,56 +277,8 @@ class UIComponents:
         )
         settings['summarizer_model'] = summarizer_model
 
-        # フォローアップ設定
-        st.markdown("**🔄 フォローアップ**")
-        settings['enable_followup'] = st.checkbox(
-            "有効化",
-            value=True,
-            key="sidebar_enable_followup_checkbox"
-        )
-
-        if settings['enable_followup']:
-            settings['followup_threshold'] = st.slider(
-                "閾値",
-                min_value=0.1,
-                max_value=1.0,
-                value=0.3,
-                step=0.1,
-                key="sidebar_followup_threshold"
-            )
-
-            settings['max_followups'] = st.slider(
-                "最大数",
-                min_value=0,
-                max_value=3,
-                value=1,
-                step=1,
-                key="sidebar_max_followups"
-            )
-        else:
-            settings['followup_threshold'] = 0.3
-            settings['max_followups'] = 0
-
-        # 重要単語登録
-        st.markdown("**📝 重要単語**")
-        keyword_input = st.text_input(
-            "単語入力",
-            placeholder="カンマ区切り",
-            key="sidebar_keyword_input"
-        )
-
-        keywords = []
-        if keyword_input.strip():
-            keywords = [kw.strip() for kw in keyword_input.split(',') if kw.strip()]
-
-        settings['target_keywords'] = keywords
-
-        if keywords and len(keywords) >= settings.get('qa_turns', 10):
-            st.warning("⚠️ 単語数 > Q&A数")
-        elif keywords:
-            st.success(f"✅ {len(keywords)}個登録")
-
         return settings
+
 
     def _render_model_selector_sidebar(self, key: str, model_options: list, default_model: str, label: str) -> str:
         """サイドバー用モデル選択セレクトボックスを描画"""
@@ -502,17 +588,203 @@ class UIComponents:
         if report:
             st.subheader("📊 最終レポート")
             st.markdown(report)
-            
-            # コピーボタン
-            import uuid
-            if st.button("📋 レポートをコピー", key=f"copy_report_{uuid.uuid4().hex[:8]}"):
-                # JavaScriptを使用してクリップボードにコピー
-                st.components.v1.html(f"""
-                    <script>
-                        navigator.clipboard.writeText(`{report.replace('`', '\\`')}`);
-                        alert('レポートがクリップボードにコピーされました！');
-                    </script>
-                """, height=0)
+
+            # エクスポートボタン
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # Word形式でダウンロード
+                word_content = UIComponents._convert_markdown_to_word_content(report)
+                st.download_button(
+                    label="📄 Wordでダウンロード",
+                    data=word_content,
+                    file_name="QA_Report.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    help="レポートをWord文書形式でダウンロードします"
+                )
+
+            with col2:
+                # テキスト形式でダウンロード（バックアップ）
+                text_content = UIComponents._convert_markdown_to_text(report)
+                st.download_button(
+                    label="📝 テキストでダウンロード",
+                    data=text_content,
+                    file_name="QA_Report.txt",
+                    mime="text/plain",
+                    help="レポートをテキスト形式でダウンロードします"
+                )
+
+    @staticmethod
+    def _convert_markdown_to_word_content(markdown_text: str) -> bytes:
+        """MarkdownテキストをWord文書に変換"""
+        try:
+            from docx import Document
+            from docx.shared import Inches
+            import re
+
+            doc = Document()
+
+            # ドキュメントのタイトル
+            title = doc.add_heading('AI Q&Aセッション レポート', 0)
+
+            # 現在の日時を追加
+            from datetime import datetime
+            date_paragraph = doc.add_paragraph(f"生成日時: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}")
+            date_paragraph.runs[0].italic = True
+
+            doc.add_paragraph()  # 空行
+
+            # Markdownを解析してWord文書に変換
+            lines = markdown_text.split('\n')
+            current_list = None
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    doc.add_paragraph()  # 空行
+                    continue
+
+                # 見出し処理
+                if line.startswith('###'):
+                    doc.add_heading(line[3:].strip(), level=3)
+                elif line.startswith('##'):
+                    doc.add_heading(line[2:].strip(), level=2)
+                elif line.startswith('#'):
+                    doc.add_heading(line[1:].strip(), level=1)
+
+                # リスト処理
+                elif line.startswith('- ') or line.startswith('* '):
+                    text = line[2:].strip()
+                    # 太字処理
+                    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+                    doc.add_paragraph(text, style='List Bullet')
+
+                # 通常のテキスト
+                else:
+                    # 太字処理
+                    if '**' in line:
+                        p = doc.add_paragraph()
+                        parts = re.split(r'\*\*(.*?)\*\*', line)
+                        for i, part in enumerate(parts):
+                            if i % 2 == 0:
+                                p.add_run(part)
+                            else:
+                                p.add_run(part).bold = True
+                    else:
+                        doc.add_paragraph(line)
+
+            # バイト形式で保存
+            from io import BytesIO
+            word_buffer = BytesIO()
+            doc.save(word_buffer)
+            word_buffer.seek(0)
+
+            return word_buffer.getvalue()
+
+        except ImportError:
+            # python-docxが利用できない場合はテキスト形式で返す
+            st.warning("Word形式の出力にはpython-docxライブラリが必要です。テキスト形式でダウンロードしてください。")
+            return UIComponents._convert_markdown_to_text(markdown_text).encode('utf-8')
+        except Exception as e:
+            st.error(f"Word形式への変換エラー: {str(e)}")
+            return UIComponents._convert_markdown_to_text(markdown_text).encode('utf-8')
+
+    @staticmethod
+    def _convert_markdown_to_text(markdown_text: str) -> str:
+        """Markdownテキストをプレーンテキストに変換"""
+        import re
+        from datetime import datetime
+
+        # ヘッダーを追加
+        result = f"AI Q&Aセッション レポート\n"
+        result += f"生成日時: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}\n"
+        result += "=" * 50 + "\n\n"
+
+        # Markdownの装飾を除去
+        text = re.sub(r'#+\s*', '', markdown_text)  # 見出しマークを除去
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # 太字マークを除去
+        text = re.sub(r'\*(.*?)\*', r'\1', text)  # イタリックマークを除去
+        text = re.sub(r'`(.*?)`', r'\1', text)  # コードマークを除去
+
+        result += text
+        return result
+
+    @staticmethod
+    def generate_quick_report(summary: str, qa_pairs: list, document_info: dict = None) -> str:
+        """Quickモード用の簡易レポートを生成"""
+        from datetime import datetime
+
+        # レポートヘッダー
+        report = f"""# AI文書要約・Q&Aセッション レポート
+
+**生成日時**: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}
+**処理モード**: Quickモード（高速処理）
+
+---
+
+"""
+
+        # 文書情報
+        if document_info:
+            report += f"""## 📋 文書情報
+
+- **ページ数**: {document_info.get('page_count', 'N/A')}
+- **トークン数**: {document_info.get('total_tokens', 'N/A'):,}
+- **Q&A数**: {len(qa_pairs)}
+
+---
+
+"""
+
+        # 要約セクション
+        if summary:
+            report += f"""## 📄 文書要約
+
+{summary}
+
+---
+
+"""
+
+        # Q&Aセクション
+        if qa_pairs:
+            report += """## 💬 Q&Aセッション
+
+"""
+            for i, qa_pair in enumerate(qa_pairs, 1):
+                question = qa_pair.get('question', '質問なし')
+                answer = qa_pair.get('answer', '回答なし')
+
+                report += f"""### Q{i}: {question}
+
+**回答**: {answer}
+
+"""
+
+                # フォローアップがある場合
+                followup_question = qa_pair.get('followup_question', '')
+                followup_answer = qa_pair.get('followup_answer', '')
+
+                if followup_question and followup_answer:
+                    report += f"""**追加質問**: {followup_question}
+
+**追加回答**: {followup_answer}
+
+"""
+
+                report += "---\n\n"
+
+        # フッター
+        report += f"""## 📊 セッション統計
+
+- **総Q&A数**: {len(qa_pairs)}
+- **処理完了**: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}
+- **処理モード**: Quickモード（AI最終レポート生成なし）
+
+*このレポートはQuickモードで生成されました。詳細な分析や洞察が必要な場合は、通常モードをご利用ください。*
+"""
+
+        return report
     
     @staticmethod
     def render_statistics(stats: Dict[str, Any]):
