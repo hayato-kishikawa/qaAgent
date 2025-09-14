@@ -62,18 +62,10 @@ class QAApp:
     
     def run(self):
         """アプリケーションを実行"""
-        # ページ設定（カスタムアイコンを使用）
-        import os
-        from pathlib import Path
-
-        icon_path = Path(__file__).parent / "qaAgent_icon.png"
-
-        # カスタムアイコンが存在する場合は使用、なければデフォルトの絵文字
-        page_icon = str(icon_path) if icon_path.exists() else self.settings.PAGE_ICON
-
+        # ページ設定
         st.set_page_config(
             page_title=self.settings.PAGE_TITLE,
-            page_icon=page_icon,
+            page_icon=self.settings.PAGE_ICON,
             layout=self.settings.LAYOUT
         )
         
