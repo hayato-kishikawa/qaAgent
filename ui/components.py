@@ -8,7 +8,7 @@ class UIComponents:
     @staticmethod
     def render_header():
         """アプリケーションヘッダーを描画"""
-        st.title("🎓 StudyMateAgent")
+        st.title("🎓 SkimMateAgent")
         st.markdown("""
         PDFをアップロードして、AIエージェントによる対話形式で効果的に理解を深めましょう。
         """)
@@ -16,32 +16,44 @@ class UIComponents:
     
     def render_sidebar_settings(self) -> Dict[str, Any]:
         """サイドバーに設定を描画"""
+        from services.session_manager import SessionManager
+
         with st.sidebar:
-            st.header("⚙️ 設定")
+            # 設定ロック状態を確認
+            is_locked = SessionManager.is_settings_locked()
 
-            # 処理モード設定
-            st.subheader("⚡ 処理モード")
-            processing_settings = self.render_processing_mode_sidebar()
+            # ロック時のヘッダー
+            if is_locked:
+                st.header("🔒 設定（処理中のためロック）")
+                st.warning("⚠️ Q&A処理中は設定を変更できません")
+            else:
+                st.header("⚙️ 設定")
 
-            st.divider()
+            # 設定コンテナ（ロック時は無効化）
+            with st.container():
+                # 処理モード設定
+                st.subheader("⚡ 処理モード")
+                processing_settings = self.render_processing_mode_sidebar(disabled=is_locked)
 
-            # Q&A設定
-            st.subheader("💬 Q&A設定")
-            qa_settings = self.render_basic_qa_settings_sidebar()
+                st.divider()
 
-            st.divider()
+                # Q&A設定
+                st.subheader("💬 Q&A設定")
+                qa_settings = self.render_basic_qa_settings_sidebar(disabled=is_locked)
 
-            # フォローアップ設定
-            st.subheader("🔄 フォローアップ")
-            followup_settings = self.render_followup_settings_sidebar()
+                st.divider()
 
-            st.divider()
+                # フォローアップ設定
+                st.subheader("🔄 フォローアップ")
+                followup_settings = self.render_followup_settings_sidebar(disabled=is_locked)
 
-            # 重要単語設定
-            st.subheader("📝 重要単語設定")
-            keyword_settings = self.render_keyword_settings_sidebar(qa_settings.get('qa_turns', 10))
+                st.divider()
 
-            st.divider()
+                # 重要単語設定
+                st.subheader("📝 重要単語設定")
+                keyword_settings = self.render_keyword_settings_sidebar(qa_settings.get('qa_turns', 10), disabled=is_locked)
+
+                st.divider()
 
             # ログアウトボタン
             if st.button("🔓 ログアウト", use_container_width=True):
@@ -54,7 +66,7 @@ class UIComponents:
             return settings
 
 
-    def render_processing_mode_sidebar(self) -> Dict[str, Any]:
+    def render_processing_mode_sidebar(self, disabled: bool = False) -> Dict[str, Any]:
         """サイドバー用処理モード設定を描画"""
         settings = {}
 
@@ -65,6 +77,7 @@ class UIComponents:
             "Quickモード",
             value=False,
             key="sidebar_quick_mode",
+            disabled=disabled,
             help="最終レポートをAI生成せず、要約とQ&Aを単純結合して高速化します"
         )
 
@@ -131,7 +144,7 @@ class UIComponents:
         st.markdown('</div>', unsafe_allow_html=True)
         return settings
 
-    def render_basic_qa_settings_sidebar(self) -> Dict[str, Any]:
+    def render_basic_qa_settings_sidebar(self, disabled: bool = False) -> Dict[str, Any]:
         """サイドバー用基本Q&A設定を描画"""
         settings = {}
 
@@ -144,6 +157,7 @@ class UIComponents:
             max_value=20,
             value=5,
             step=1,
+            disabled=disabled,
             key="sidebar_qa_turns",
             help="生成するQ&Aペアの数を設定します"
         )
@@ -152,7 +166,7 @@ class UIComponents:
         st.markdown('</div>', unsafe_allow_html=True)
         return settings
 
-    def render_followup_settings_sidebar(self) -> Dict[str, Any]:
+    def render_followup_settings_sidebar(self, disabled: bool = False) -> Dict[str, Any]:
         """サイドバー用フォローアップ設定を描画"""
         settings = {}
 
@@ -160,7 +174,8 @@ class UIComponents:
             "追加質問機能を有効化",
             value=False,
             key="sidebar_enable_followup_checkbox",
-            help="学習者の理解度に応じて追加の質問を自動生成します"
+            help="学習者の理解度に応じて追加の質問を自動生成します",
+            disabled=disabled
         )
 
         if settings['enable_followup']:
@@ -199,7 +214,8 @@ class UIComponents:
                 options=list(threshold_options.keys()),
                 index=1,  # デフォルトは「バランス」
                 key="sidebar_followup_level",
-                help="回答の専門性に応じた追加質問の発生頻度を調整できます"
+                help="回答の専門性に応じた追加質問の発生頻度を調整できます",
+                disabled=disabled
             )
 
             # 選択されたレベルの詳細説明をカードで表示
@@ -267,7 +283,7 @@ class UIComponents:
 
         return settings
 
-    def render_keyword_settings_sidebar(self, qa_turns: int) -> Dict[str, Any]:
+    def render_keyword_settings_sidebar(self, qa_turns: int, disabled: bool = False) -> Dict[str, Any]:
         """サイドバー用重要単語設定を描画"""
         settings = {}
 

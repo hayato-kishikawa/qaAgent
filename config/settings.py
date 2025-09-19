@@ -41,7 +41,7 @@ class Settings:
     MAX_FOLLOWUP_QUESTIONS = 3
     
     # Streamlit設定
-    PAGE_TITLE = "StudyMateAgent"
+    PAGE_TITLE = "SkimMateAgent"
     PAGE_ICON = "🎓"
     LAYOUT = "wide"
     

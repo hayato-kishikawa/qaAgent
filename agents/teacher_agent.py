@@ -8,6 +8,7 @@ class TeacherAgent(BaseAgent):
     def __init__(self, kernel_service: KernelService, prompt_version: str = "latest"):
         self.answers_provided = 0
         self.document_content = ""
+        self.qa_history = []  # Q&A履歴を保存
         super().__init__("teacher", kernel_service, prompt_version)
     
     def get_description(self) -> str:
@@ -184,10 +185,77 @@ class TeacherAgent(BaseAgent):
         
         return min(total_score, 1.0)
     
+    def add_qa_to_history(self, question: str, answer: str):
+        """Q&A履歴に追加"""
+        self.qa_history.append({
+            "question": question,
+            "answer": answer,
+            "timestamp": self.answers_provided + 1
+        })
+
+    def get_qa_history(self) -> list:
+        """Q&A履歴を取得"""
+        return self.qa_history.copy()
+
+    def set_qa_history(self, qa_pairs: list):
+        """Q&A履歴を設定（初期セッションデータから）"""
+        self.qa_history = []
+        for i, qa in enumerate(qa_pairs):
+            self.qa_history.append({
+                "question": qa.get("question", ""),
+                "answer": qa.get("answer", ""),
+                "timestamp": i + 1
+            })
+
+    def answer_interactive_question(self, question: str) -> str:
+        """
+        インタラクティブな質問に回答（履歴を参照）
+
+        Args:
+            question: ユーザーからの質問
+
+        Returns:
+            回答プロンプト
+        """
+        # 教師エージェントのシステムプロンプト（Identity）を取得
+        system_prompt = self.prompt_loader.get_system_prompt(self.agent_type, self.prompt_version)
+
+        prompt_parts = [
+            f"【システムプロンプト】\n{system_prompt}",
+            "",
+            f"【ユーザーからの質問】\n{question}",
+            "",
+            f"【参考文書】\n{self.document_content}" if self.document_content else "",
+            ""
+        ]
+
+        # 過去のQ&A履歴を含める（最新5件）
+        if self.qa_history:
+            prompt_parts.append("【これまでのQ&A履歴】")
+            recent_history = self.qa_history[-5:]  # 最新5件
+            for qa in recent_history:
+                prompt_parts.append(f"Q: {qa['question']}")
+                prompt_parts.append(f"A: {qa['answer'][:200]}...")  # 回答は200文字まで
+                prompt_parts.append("")
+
+        prompt_parts.extend([
+            "【指示】",
+            "上記の質問に対して、文書内容と過去のQ&A履歴を参考にして回答してください。",
+            "- 文書に記載されている内容を優先してください",
+            "- 文書にない内容については「文書には記載されていませんが、一般的には〜」として回答してください",
+            "- 過去の会話の流れも考慮してください",
+            "- 簡潔で分かりやすい回答にしてください",
+            "",
+            "回答のみを出力してください。"
+        ])
+
+        return "\n".join([part for part in prompt_parts if part])
+
     def get_status(self) -> Dict[str, Any]:
         """現在の状態を取得"""
         return {
             "answers_provided": self.answers_provided,
             "has_document": bool(self.document_content),
-            "document_length": len(self.document_content) if self.document_content else 0
+            "document_length": len(self.document_content) if self.document_content else 0,
+            "qa_history_count": len(self.qa_history)
         }

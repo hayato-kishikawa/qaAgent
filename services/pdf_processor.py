@@ -232,19 +232,26 @@ class PDFProcessor:
     def process_pdf(self, pdf_file) -> Dict[str, any]:
         """
         PDFファイルの完全処理
-        
+
         Args:
             pdf_file: PDFファイル
-            
+
         Returns:
             処理結果の辞書
         """
         # 検証
         self.validate_pdf(pdf_file)
-        
+
+        # 生のPDFデータを保存（PDFビューアー用）
+        pdf_file.seek(0)
+        raw_content = pdf_file.read()
+
+        # ファイルポインタを先頭に戻す
+        pdf_file.seek(0)
+
         # テキスト抽出
         text_content = self.extract_text_from_pdf(pdf_file)
-        
+
         # 画像抽出（ファイルを先頭に戻す）
         pdf_file.seek(0)
         try:
@@ -254,22 +261,25 @@ class PDFProcessor:
             # 画像処理でエラーが発生してもテキスト処理は継続
             images = []
             base64_images = []
-        
+
         # トークン数チェック
         total_tokens = self.count_tokens(text_content)
-        
+
         # トークン制限チェックと分割
         text_chunks = []
         if total_tokens > self.settings.MAX_TOKENS:
             text_chunks = self.split_text_by_token_limit(text_content)
         else:
             text_chunks = [text_content]
-        
+
         return {
             "text_content": text_content,
             "text_chunks": text_chunks,
             "images": base64_images,
             "total_tokens": total_tokens,
             "page_count": len(images),
-            "is_split": len(text_chunks) > 1
+            "is_split": len(text_chunks) > 1,
+            "raw_content": raw_content,  # PDFビューアー用の生データ
+            "input_type": "pdf",  # 入力タイプを明示
+            "filename": getattr(pdf_file, 'name', 'document.pdf')  # ファイル名を取得
         }

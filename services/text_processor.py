@@ -20,7 +20,9 @@ class TextProcessor:
                 'char_count': text_info['char_count'],
                 'word_count': text_info['word_count'],
                 'is_split': False,  # テキストは分割しない
-                'source_type': 'text'
+                'source_type': 'text',
+                'input_type': 'text',  # ビューアータブで適切に表示するため
+                'filename': 'テキスト入力'  # ファイル名を設定
             }
 
             return result

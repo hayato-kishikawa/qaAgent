@@ -14,16 +14,17 @@ class SessionManager:
             st.session_state.processing = False
             st.session_state.qa_completed = False
             st.session_state.current_step = "upload"  # upload, processing, qa, completed
-            
+            st.session_state.settings_locked = False  # 設定ロック状態
+
             # 文書関連
             st.session_state.document_data = {}
             st.session_state.qa_turns = 10
-            
+
             # Q&A関連
             st.session_state.qa_pairs = []
             st.session_state.summary = ""
             st.session_state.final_report = ""
-            
+
             # UI関連
             st.session_state.selected_tab = 0
             st.session_state.show_progress = False
@@ -161,12 +162,14 @@ class SessionManager:
         # 重要なキーのみ残してリセット
         keys_to_keep = ['initialized']
         keys_to_remove = [key for key in st.session_state.keys() if key not in keys_to_keep]
-        
+
         for key in keys_to_remove:
             del st.session_state[key]
-        
+
         # 再初期化
         SessionManager.initialize_session()
+        # 設定ロックを解除
+        SessionManager.unlock_settings()
     
     @staticmethod
     def set_selected_tab(tab_index: int):
@@ -179,6 +182,21 @@ class SessionManager:
         return st.session_state.get('selected_tab', 0)
     
     @staticmethod
+    def lock_settings():
+        """設定をロック"""
+        st.session_state.settings_locked = True
+
+    @staticmethod
+    def unlock_settings():
+        """設定のロックを解除"""
+        st.session_state.settings_locked = False
+
+    @staticmethod
+    def is_settings_locked() -> bool:
+        """設定がロックされているかチェック"""
+        return st.session_state.get('settings_locked', False)
+
+    @staticmethod
     def get_session_info() -> Dict[str, Any]:
         """セッション情報を取得"""
         return {
@@ -188,5 +206,6 @@ class SessionManager:
             'current_step': st.session_state.get('current_step', 'upload'),
             'qa_pairs_count': len(st.session_state.get('qa_pairs', [])),
             'has_summary': bool(st.session_state.get('summary', '')),
-            'has_final_report': bool(st.session_state.get('final_report', ''))
+            'has_final_report': bool(st.session_state.get('final_report', '')),
+            'settings_locked': st.session_state.get('settings_locked', False)
         }

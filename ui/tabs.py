@@ -11,13 +11,16 @@ class TabManager:
     
     def render_main_tabs(self, session_data: Dict[str, Any]):
         """メインタブを描画"""
-        tab1, tab2 = st.tabs(["📚 要約・Q&Aセッション", "📊 最終レポート"])
-        
+        tab1, tab2, tab3 = st.tabs(["📚 要約・Q&Aセッション", "📊 最終レポート", "📄 文書ビューアー"])
+
         with tab1:
             self._render_qa_session_tab(session_data)
-        
+
         with tab2:
             self._render_final_report_tab(session_data)
+
+        with tab3:
+            self._render_document_viewer_tab(session_data)
     
     def _render_qa_session_tab(self, session_data: Dict[str, Any]):
         """要約・Q&Aセッションタブの内容"""
@@ -32,6 +35,9 @@ class TabManager:
         if qa_pairs:
             st.subheader("💬 Q&Aセッション結果")
             self._render_qa_pairs(qa_pairs)
+
+            # インタラクティブ質問セクション
+            self._render_interactive_question_section(session_data)
         else:
             # Q&Aが開始されていない場合の表示
             processing = session_data.get('processing', False)
@@ -128,7 +134,106 @@ class TabManager:
                 
                 if caption_parts:
                     st.caption(" | ".join(caption_parts))
-    
+
+    def _render_interactive_question_section(self, session_data: Dict[str, Any]):
+        """インタラクティブ質問セクションを描画"""
+        st.divider()
+        st.subheader("💭 追加で質問する")
+
+        # 質問入力
+        with st.form("interactive_question_form", clear_on_submit=True):
+            user_question = st.text_area(
+                "文書やQ&Aセッションについて質問してください：",
+                placeholder="例: 先ほどの説明で分からなかった部分について詳しく教えてください",
+                height=100
+            )
+
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                submit_button = st.form_submit_button("質問する", use_container_width=True)
+
+            if submit_button and user_question.strip():
+                # セッション状態に質問を保存
+                if 'interactive_questions' not in st.session_state:
+                    st.session_state.interactive_questions = []
+
+                # 教師エージェントに質問を送信
+                self._process_interactive_question(user_question, session_data)
+
+        # 過去の質問・回答履歴を表示
+        if 'interactive_questions' in st.session_state and st.session_state.interactive_questions:
+            st.subheader("🗣️ 質問履歴")
+            for i, qa in enumerate(reversed(st.session_state.interactive_questions), 1):
+                with st.expander(f"追加質問 {len(st.session_state.interactive_questions) - i + 1}: {qa['question'][:50]}...", expanded=i == 1):
+                    st.markdown(f"**質問：** {qa['question']}")
+                    st.markdown(f"**回答：** {qa['answer']}")
+                    if qa.get('timestamp'):
+                        st.caption(f"質問時刻: {qa['timestamp']}")
+
+    def _process_interactive_question(self, question: str, session_data: Dict[str, Any]):
+        """インタラクティブ質問を処理"""
+        from agents.teacher_agent import TeacherAgent
+        from services.kernel_service import KernelService, AgentOrchestrator
+        from services.session_manager import SessionManager
+        import asyncio
+        from datetime import datetime
+
+        try:
+            with st.spinner("💭 回答を生成中..."):
+                # カーネルサービスを初期化
+                kernel_service = KernelService()
+
+                # エージェントオーケストレーターを初期化
+                orchestrator = AgentOrchestrator(kernel_service)
+
+                # 教師エージェントを初期化
+                teacher_agent = TeacherAgent(kernel_service)
+
+                # 文書内容を設定
+                document_data = SessionManager.get_document_data()
+                document_content = document_data.get('text_content', '')
+                teacher_agent.set_document_content(document_content)
+
+                # Q&A履歴を設定
+                qa_pairs = session_data.get('qa_pairs', [])
+                teacher_agent.set_qa_history(qa_pairs)
+
+                # 質問に対する回答を生成
+                prompt = teacher_agent.answer_interactive_question(question)
+
+                # セマンティックカーネルで回答生成
+                async def generate_answer():
+                    # 教師エージェントのKernelエージェントを取得
+                    teacher_kernel_agent = teacher_agent.get_agent()
+                    result = await orchestrator.single_agent_invoke(
+                        teacher_kernel_agent,
+                        prompt
+                    )
+                    return result
+
+                answer = asyncio.run(generate_answer())
+
+                # 履歴に追加
+                qa_entry = {
+                    'question': question,
+                    'answer': answer,
+                    'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+
+                # セッション状態に保存
+                if 'interactive_questions' not in st.session_state:
+                    st.session_state.interactive_questions = []
+                st.session_state.interactive_questions.append(qa_entry)
+
+                # 教師エージェントの履歴にも追加
+                teacher_agent.add_qa_to_history(question, answer)
+
+                st.success("✅ 回答完了！下の履歴をご確認ください。")
+                st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ 回答生成エラー: {str(e)}")
+
     def get_streaming_display(self) -> Optional[StreamingDisplay]:
         """ストリーミング表示オブジェクトを取得"""
         return self.streaming_display
@@ -137,6 +242,118 @@ class TabManager:
         """ストリーミング内容を更新"""
         if self.streaming_display:
             self.streaming_display.display_agent_message(agent_name, content, message_type)
+
+    def _render_document_viewer_tab(self, session_data: Dict[str, Any]):
+        """文書ビューアータブの内容"""
+        from services.session_manager import SessionManager
+        import base64
+
+        # 文書データを取得
+        document_data = SessionManager.get_document_data()
+
+        if not document_data:
+            st.info("📄 文書がアップロードされていません。左のサイドバーからPDFをアップロードするか、テキストを入力してください。")
+            return
+
+        # 文書データから必要な情報を取得
+        if document_data:
+            input_type = document_data.get('input_type', 'unknown')
+            text_content = document_data.get('text_content', '')
+
+            # PDFビューアー表示（PDFの場合）
+            if input_type == 'pdf' and document_data.get('raw_content'):
+                st.markdown("**📄 PDFビューアー**")
+
+                try:
+                    # PDFの生データをBase64エンコード
+                    pdf_data = document_data.get('raw_content')
+                    if isinstance(pdf_data, bytes):
+                        b64_pdf = base64.b64encode(pdf_data).decode()
+                    else:
+                        # 既にBase64エンコードされている場合
+                        b64_pdf = pdf_data
+
+                    # PDFビューアーのHTML
+                    pdf_display = f"""
+                    <div style="width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 5px;">
+                        <iframe
+                            src="data:application/pdf;base64,{b64_pdf}"
+                            width="100%"
+                            height="100%"
+                            type="application/pdf"
+                            style="border: none;">
+                            <p>PDFを表示できません。ブラウザがPDF表示をサポートしていない可能性があります。</p>
+                        </iframe>
+                    </div>
+                    """
+
+                    st.markdown(pdf_display, unsafe_allow_html=True)
+
+                except Exception as e:
+                    st.error(f"PDFの表示でエラーが発生しました: {str(e)}")
+                    # エラー時はテキスト表示にフォールバック
+                    st.markdown("**📖 抽出されたテキスト**")
+                    if text_content:
+                        st.text_area(
+                            "抽出されたテキスト:",
+                            value=text_content,
+                            height=400,
+                            disabled=True,
+                            key="pdf_text_fallback"
+                        )
+                    else:
+                        st.warning("⚠️ 文書内容が取得できませんでした。")
+
+            # テキスト表示（テキスト入力の場合のみ）
+            elif input_type == 'text':
+                st.markdown("**📖 文書内容（テキスト表示）**")
+
+                # 検索機能
+                search_term = st.text_input(
+                    "🔍 文書内検索",
+                    placeholder="キーワードを入力して文書内を検索...",
+                    key="document_search"
+                )
+
+                # テキスト入力の場合：検索機能付きシンプル表示
+                if text_content:
+                    if search_term:
+                        # 検索結果の表示
+                        if search_term.lower() in text_content.lower():
+                            match_count = text_content.lower().count(search_term.lower())
+                            st.success(f"🔍 「{search_term}」が{match_count}箇所で見つかりました")
+
+                            # 検索ワードをハイライト
+                            import re
+                            highlighted_content = re.sub(
+                                f'({re.escape(search_term)})',
+                                r'<mark style="background-color: #ffeb3b;">\1</mark>',
+                                text_content,
+                                flags=re.IGNORECASE
+                            )
+                            st.markdown(highlighted_content, unsafe_allow_html=True)
+                        else:
+                            st.warning(f"「{search_term}」は文書内に見つかりませんでした")
+                            st.text_area(
+                                "入力されたテキスト:",
+                                value=text_content,
+                                height=400,
+                                disabled=True,
+                                key="text_content_display_no_match"
+                            )
+                    else:
+                        # 検索なしの場合は通常表示
+                        st.text_area(
+                            "入力されたテキスト:",
+                            value=text_content,
+                            height=400,
+                            disabled=True,
+                            key="text_content_display"
+                        )
+                else:
+                    st.warning("⚠️ 文書内容が取得できませんでした。")
+        else:
+            st.warning("⚠️ 文書データが見つかりませんでした。")
 
 class UploadTab:
     """アップロード・設定タブを管理するクラス"""
@@ -176,9 +393,15 @@ class UploadTab:
                 start_button = st.button("🚀 実行開始", type="primary", use_container_width=True)
                 result['start_processing'] = start_button
 
-                # 即時フィードバック（rerunしない）
+                # 実行ボタンがクリックされた瞬間に設定をロック
                 if start_button:
-                    st.success("🔄 処理を開始しています...")
+                    from services.session_manager import SessionManager
+                    # まだロックされていない場合のみロックと再読み込み
+                    if not SessionManager.is_settings_locked():
+                        SessionManager.lock_settings()
+                        st.success("🔄 処理を開始しています...")
+                        st.info("🔒 設定をロックしました")
+                        st.rerun()  # ページを再読み込みして設定の無効化を反映
 
             with col2:
                 if st.button("🔄 リセット", use_container_width=True):

@@ -294,7 +294,7 @@ class QAApp:
         """PDFの処理を開始"""
         SessionManager.start_processing()
         SessionManager.set_qa_turns(processing_settings['qa_turns'])
-        
+
         # 処理設定をセッションに保存
         SessionManager.set_processing_settings(processing_settings)
         
@@ -357,6 +357,7 @@ class QAApp:
             # Quickモード情報をセッションに保存
             st.session_state['quick_mode'] = quick_mode
             SessionManager.stop_processing()
+            SessionManager.unlock_settings()  # 設定ロックを解除
             SessionManager.set_step("completed")
             
             # 完了後にタブを表示
@@ -366,6 +367,7 @@ class QAApp:
         except Exception as e:
             st.error(f"処理エラー: {str(e)}")
             SessionManager.stop_processing()
+            SessionManager.unlock_settings()  # エラー時も設定ロックを解除
 
     def _start_text_processing(self, text_content: str, processing_settings: Dict[str, Any]):
         """テキストの処理を開始"""
@@ -408,21 +410,9 @@ class QAApp:
             st.success("✅ 要約生成完了")
             self.components.render_summary_section(initial_summary)
 
-            # 並列処理オプション
-            use_parallel = st.checkbox("⚡ Q&A並列処理を有効にする",
-                                     value=True,
-                                     key="use_parallel_processing_text",
-                                     help="Q&A生成を並列処理して高速化します（推奨）")
-
-            if use_parallel:
-                # Q&Aのみを並列実行
-                with st.spinner("💬 Q&Aセッションを並列実行中..."):
-                    qa_pairs = asyncio.run(self._run_parallel_qa_only(text_data, processing_settings))
-            else:
-                # 従来のQ&A順次処理
-                # ステップ3: Q&Aセッション
-                st.subheader("💬 Q&Aセッション")
-                qa_pairs = self._run_streaming_qa_session(text_data, processing_settings)
+            # Q&Aのみを並列実行
+            with st.spinner("💬 Q&Aセッションを並列実行中..."):
+                qa_pairs = asyncio.run(self._run_parallel_qa_only(text_data, processing_settings))
 
             # 結果を表示
             st.success("✅ 要約・Q&Aセッション完了")
@@ -446,6 +436,7 @@ class QAApp:
             # Quickモード情報をセッションに保存
             st.session_state['quick_mode'] = quick_mode
             SessionManager.stop_processing()
+            SessionManager.unlock_settings()  # 設定ロックを解除
             SessionManager.set_step("completed")
 
             # 完了後にタブを表示
@@ -455,6 +446,7 @@ class QAApp:
         except Exception as e:
             st.error(f"処理エラー: {str(e)}")
             SessionManager.stop_processing()
+            SessionManager.unlock_settings()  # エラー時も設定ロックを解除
     
     async def _run_qa_session(self, pdf_data: Dict[str, Any], qa_turns: int):
         """Q&Aセッションを実行"""
@@ -485,11 +477,13 @@ class QAApp:
             
             # 完了
             SessionManager.stop_processing()
+            SessionManager.unlock_settings()  # 設定ロックを解除
             SessionManager.set_step("completed")
-            
+
         except Exception as e:
             st.error(f"Q&Aセッション実行エラー: {str(e)}")
             SessionManager.stop_processing()
+            SessionManager.unlock_settings()  # エラー時も設定ロックを解除
     
     async def _generate_summary(self, document_content: str) -> str:
         """文書要約を生成"""
@@ -504,20 +498,47 @@ class QAApp:
             return f"要約生成エラー: {str(e)}"
     
     def _split_document(self, content: str, qa_turns: int) -> list:
-        """文書をセクションに分割"""
-        # 簡易的な分割（段落ベース）
-        paragraphs = content.split('\\n\\n')
-        
-        # セクション数に合わせて分割
-        section_size = max(1, len(paragraphs) // qa_turns)
+        """文書をセクションに分割（設定値通りの数を確保）"""
+        # 段落ベースで分割
+        paragraphs = [p.strip() for p in content.split('\\n\\n') if p.strip()]
+
+        # 段落がない場合は文書全体を使用
+        if not paragraphs:
+            paragraphs = [content.strip()]
+
         sections = []
-        
-        for i in range(0, len(paragraphs), section_size):
-            section = '\\n\\n'.join(paragraphs[i:i+section_size])
-            if section.strip():
+
+        # 段落数が質問数より少ない場合は、文書全体を繰り返し使用
+        if len(paragraphs) < qa_turns:
+            # 各質問に対して文書全体または最適な部分を割り当て
+            for i in range(qa_turns):
+                if i < len(paragraphs):
+                    # 利用可能な段落がある場合はそれを使用
+                    sections.append(paragraphs[i])
+                else:
+                    # 段落が足りない場合は文書全体を使用
+                    sections.append(content.strip())
+        else:
+            # 通常の分割処理（段落数 >= 質問数）
+            section_size = max(1, len(paragraphs) // qa_turns)
+
+            for i in range(qa_turns):
+                start_idx = i * section_size
+                end_idx = min(start_idx + section_size, len(paragraphs))
+
+                # 最後のセクションには残りの段落も含める
+                if i == qa_turns - 1:
+                    end_idx = len(paragraphs)
+
+                section = '\\n\\n'.join(paragraphs[start_idx:end_idx])
                 sections.append(section)
-        
-        return sections[:qa_turns]  # 指定されたターン数まで
+
+        # 必ず指定された数のセクションを返す
+        while len(sections) < qa_turns:
+            # 不足分は文書全体で補完
+            sections.append(content.strip())
+
+        return sections[:qa_turns]
     
     async def _execute_qa_loop(self, sections: list, qa_turns: int) -> list:
         """Q&Aループを実行"""
