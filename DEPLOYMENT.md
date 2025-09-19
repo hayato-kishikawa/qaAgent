@@ -44,7 +44,7 @@ APP_PASSWORD = "your-secure-password"
 
 ### パスワード認証
 
-- デフォルトパスワード: `qaAgent2024`
+- デフォルトパスワード: `tig`
 - カスタムパスワード: `APP_PASSWORD`でSecrets設定
 - パスワードは必ずセキュアなものに変更してください
 

@@ -171,32 +171,6 @@ class QAApp:
                 char_count = len(system_prompt)
                 st.caption(f"文字数: {char_count:,}文字")
 
-            # サンプルメッセージでの実行例
-            st.divider()
-            st.subheader("💬 実行例プレビュー")
-
-            sample_user_message = st.text_area(
-                "サンプルのユーザーメッセージを入力",
-                value=self._get_sample_message(agent_type),
-                height=100,
-                key=f"sample_message_{agent_type}"
-            )
-
-            if sample_user_message:
-                st.markdown("**モデルに送信される完全なメッセージ:**")
-
-                # 完全なメッセージ構成を表示
-                full_message = f"""システムメッセージ:
-{system_prompt}
-
-ユーザーメッセージ:
-{sample_user_message}"""
-
-                st.code(full_message, language="text")
-
-                total_chars = len(full_message)
-                estimated_tokens = int(total_chars * 0.75)  # 概算
-                st.caption(f"合計文字数: {total_chars:,}文字 | 推定トークン数: {estimated_tokens:,}トークン")
 
         except Exception as e:
             st.error(f"プロンプト読み込みエラー: {str(e)}")
@@ -247,15 +221,6 @@ class QAApp:
         except Exception as e:
             return f"プロンプト生成エラー: {str(e)}"
 
-    def _get_sample_message(self, agent_type: str) -> str:
-        """エージェント別のサンプルメッセージを返す"""
-        samples = {
-            "student": "この文書の内容について質問を生成してください。\n\n[文書内容]\n機械学習は、人工知能の一分野で、コンピュータがデータから自動的に学習する技術です。",
-            "teacher": "機械学習って何ですか？",
-            "summarizer": "以下の文書とQ&Aセッションの結果から最終レポートを作成してください。\n\n[文書要約]\n機械学習の基礎概念について\n\n[Q&Aペア]\nQ: 機械学習とは何ですか？\nA: データから自動的に学習する技術です。",
-            "initial_summarizer": "以下の文書を要約してください。\n\n[文書内容]\n機械学習は、人工知能の一分野として発展してきた技術分野です..."
-        }
-        return samples.get(agent_type, "サンプルメッセージを入力してください")
     
     def _render_upload_step(self):
         """アップロード・設定ステップを描画"""

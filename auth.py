@@ -8,7 +8,7 @@ def check_password():
     def password_entered():
         """パスワード入力時の処理"""
         # 環境変数またはsecrets.tomlからパスワードを取得
-        expected_password = st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "qaAgent2024"))
+        expected_password = st.secrets.get("APP_PASSWORD", os.getenv("APP_PASSWORD", "tig"))
         
         # 入力されたパスワードをハッシュ化
         entered_password = st.session_state["password"]
