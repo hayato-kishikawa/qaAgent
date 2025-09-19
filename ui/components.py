@@ -58,7 +58,9 @@ class UIComponents:
         """サイドバー用処理モード設定を描画"""
         settings = {}
 
-        # Quickモード設定
+        st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
+
+        # Quickモード設定をカードデザインで
         settings['quick_mode'] = st.checkbox(
             "Quickモード",
             value=False,
@@ -66,25 +68,88 @@ class UIComponents:
             help="最終レポートをAI生成せず、要約とQ&Aを単純結合して高速化します"
         )
 
+        # モード説明カード
         if settings['quick_mode']:
-            st.info("💨 Quickモード: 最終レポートは簡易形式で即座に生成されます")
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #FFA50015 0%, #FF8C0008 100%);
+                border: 2px solid #FFA50040;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 12px 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                ">
+                    <span style="font-size: 24px; margin-right: 12px;">💨</span>
+                    <span style="
+                        font-weight: 700;
+                        font-size: 16px;
+                        color: #FF8C00;
+                    ">Quickモード有効</span>
+                </div>
+                <div style="
+                    color: var(--neutral-600);
+                    font-size: 13px;
+                    line-height: 1.4;
+                ">最終レポートは簡易形式で即座に生成されます。処理時間が大幅に短縮されます。</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #4ECDC415 0%, #45B7D108 100%);
+                border: 2px solid #4ECDC440;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 12px 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                ">
+                    <span style="font-size: 24px; margin-right: 12px;">🎯</span>
+                    <span style="
+                        font-weight: 700;
+                        font-size: 16px;
+                        color: #4ECDC4;
+                    ">標準モード</span>
+                </div>
+                <div style="
+                    color: var(--neutral-600);
+                    font-size: 13px;
+                    line-height: 1.4;
+                ">AIが学習内容を分析して詳細なレポートを生成します。高品質な要約が作成されます。</div>
+            </div>
+            """, unsafe_allow_html=True)
 
+        st.markdown('</div>', unsafe_allow_html=True)
         return settings
 
     def render_basic_qa_settings_sidebar(self) -> Dict[str, Any]:
         """サイドバー用基本Q&A設定を描画"""
         settings = {}
 
+        st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
+
         # Q&Aターン数設定
         settings['qa_turns'] = st.slider(
             "Q&A数",
             min_value=1,
             max_value=20,
-            value=10,
+            value=5,
             step=1,
-            key="sidebar_qa_turns"
+            key="sidebar_qa_turns",
+            help="生成するQ&Aペアの数を設定します"
         )
 
+
+        st.markdown('</div>', unsafe_allow_html=True)
         return settings
 
     def render_followup_settings_sidebar(self) -> Dict[str, Any]:
@@ -93,7 +158,7 @@ class UIComponents:
 
         settings['enable_followup'] = st.checkbox(
             "追加質問機能を有効化",
-            value=True,
+            value=False,
             key="sidebar_enable_followup_checkbox",
             help="学習者の理解度に応じて追加の質問を自動生成します"
         )
@@ -193,26 +258,6 @@ class UIComponents:
                 help="同じトピックについて生成する追加質問の上限数です"
             )
 
-            # スライダー値の可視化
-            slider_value = settings['max_followups']
-            st.markdown(f"""
-            <div style="
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: linear-gradient(135deg, #2E86AB 0%, #A23B72 100%);
-                color: white;
-                border-radius: 12px;
-                padding: 12px 20px;
-                margin-top: 12px;
-                font-weight: 700;
-                font-size: 16px;
-                text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-                box-shadow: 0 4px 12px rgba(46, 134, 171, 0.3);
-            ">
-                📊 設定値: {slider_value}問まで追加質問
-            </div>
-            """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         else:
@@ -226,19 +271,42 @@ class UIComponents:
         """サイドバー用重要単語設定を描画"""
         settings = {}
 
-        # 説明を展開可能にする
-        with st.expander("💡 重要単語機能について", expanded=False):
-            st.markdown("""
-            **🎯 機能概要**
-            - 指定した単語について**優先的に質問を生成**します
-            - 文書中の重要なキーワードを確実に学習できます
-            - 専門用語や重要概念の理解を深めるのに効果的です
+        st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
 
-            **⚠️ 注意点**
-            - 単語数はQ&A数より少なくしてください
-            - 文書に含まれていない単語は効果がありません
-            - カンマで区切って複数指定可能です
-            """)
+        # 機能説明カード
+        st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, #6C63FF15 0%, #5A52FF08 100%);
+            border: 2px solid #6C63FF40;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 12px 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        ">
+            <div style="
+                display: flex;
+                align-items: center;
+                margin-bottom: 8px;
+            ">
+                <span style="font-size: 20px; margin-right: 8px;">🎯</span>
+                <span style="
+                    font-weight: 700;
+                    font-size: 16px;
+                    color: #6C63FF;
+                ">重要単語機能</span>
+            </div>
+            <div style="
+                color: var(--neutral-600);
+                font-size: 13px;
+                line-height: 1.5;
+                margin-bottom: 8px;
+            ">指定した単語について優先的に質問を生成し、重要なキーワードを確実に学習できます</div>
+            <div style="
+                color: var(--neutral-500);
+                font-size: 12px;
+            ">💡 単語数はQ&A数より少なくしてください</div>
+        </div>
+        """, unsafe_allow_html=True)
 
         keyword_input = st.text_input(
             "重要単語を入力（カンマ区切り）",
@@ -253,24 +321,147 @@ class UIComponents:
 
         settings['target_keywords'] = keywords
 
-        # バリデーションとフィードバック
+        # ステータスカード
         if keywords and len(keywords) >= qa_turns:
-            st.error(f"❌ 単語数({len(keywords)})がQ&A数({qa_turns})以上です。単語を{len(keywords) - qa_turns + 1}個減らすか、Q&A数を増やしてください。")
-        elif keywords and len(keywords) > qa_turns * 0.8:  # 80%を超えた場合の警告
-            st.warning(f"⚠️ 単語数({len(keywords)})がQ&A数({qa_turns})の80%を超えています。他の内容についての質問が少なくなる可能性があります。")
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #FF6B6B15 0%, #FF534308 100%);
+                border: 2px solid #FF6B6B40;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 12px 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                ">
+                    <span style="font-size: 20px; margin-right: 8px;">❌</span>
+                    <span style="
+                        font-weight: 700;
+                        font-size: 16px;
+                        color: #FF6B6B;
+                    ">設定エラー</span>
+                </div>
+                <div style="
+                    color: var(--neutral-600);
+                    font-size: 13px;
+                    line-height: 1.4;
+                ">単語数({len(keywords)})がQ&A数({qa_turns})以上です。単語を{len(keywords) - qa_turns + 1}個減らすか、Q&A数を増やしてください。</div>
+            </div>
+            """, unsafe_allow_html=True)
+        elif keywords and len(keywords) > qa_turns * 0.8:
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #FFA50015 0%, #FF8C0008 100%);
+                border: 2px solid #FFA50040;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 12px 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                ">
+                    <span style="font-size: 20px; margin-right: 8px;">⚠️</span>
+                    <span style="
+                        font-weight: 700;
+                        font-size: 16px;
+                        color: #FFA500;
+                    ">バランス注意</span>
+                </div>
+                <div style="
+                    color: var(--neutral-600);
+                    font-size: 13px;
+                    line-height: 1.4;
+                ">単語数({len(keywords)})がQ&A数({qa_turns})の80%を超えています。他の内容についての質問が少なくなる可能性があります。</div>
+            </div>
+            """, unsafe_allow_html=True)
         elif keywords:
             keyword_preview = ', '.join(keywords[:3])
             if len(keywords) > 3:
                 keyword_preview += f" など{len(keywords)}個"
-            st.success(f"✅ 重要単語を{len(keywords)}個登録: {keyword_preview}")
 
-            # 推奨バランス表示
             recommended_ratio = min(len(keywords) / qa_turns, 0.5)
-            if recommended_ratio <= 0.3:
-                st.info(f"💡 良いバランスです。全Q&Aの約{recommended_ratio*100:.0f}%が重要単語関連になります。")
-        else:
-            st.info("💡 重要単語未設定。文書全体からバランスよく質問を生成します。")
 
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #4ECDC415 0%, #45B7D108 100%);
+                border: 2px solid #4ECDC440;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 12px 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-bottom: 8px;
+                ">
+                    <div style="display: flex; align-items: center;">
+                        <span style="font-size: 20px; margin-right: 8px;">✅</span>
+                        <span style="
+                            font-weight: 700;
+                            font-size: 16px;
+                            color: #4ECDC4;
+                        ">設定完了</span>
+                    </div>
+                    <span style="
+                        font-weight: 700;
+                        font-size: 14px;
+                        color: #4ECDC4;
+                        background: rgba(78, 205, 196, 0.2);
+                        padding: 4px 8px;
+                        border-radius: 6px;
+                    ">{len(keywords)}個</span>
+                </div>
+                <div style="
+                    color: var(--neutral-600);
+                    font-size: 13px;
+                    line-height: 1.4;
+                    margin-bottom: 8px;
+                ">登録単語: {keyword_preview}</div>
+                <div style="
+                    color: var(--neutral-500);
+                    font-size: 12px;
+                ">📊 全Q&Aの約{recommended_ratio*100:.0f}%が重要単語関連になります</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #95A5A615 0%, #74858508 100%);
+                border: 2px solid #95A5A640;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 12px 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                ">
+                    <span style="font-size: 20px; margin-right: 8px;">💡</span>
+                    <span style="
+                        font-weight: 700;
+                        font-size: 16px;
+                        color: #95A5A6;
+                    ">未設定</span>
+                </div>
+                <div style="
+                    color: var(--neutral-600);
+                    font-size: 13px;
+                    line-height: 1.4;
+                ">重要単語未設定。文書全体からバランスよく質問を生成します。</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
         return settings
 
     def render_model_settings_sidebar(self) -> Dict[str, Any]:
