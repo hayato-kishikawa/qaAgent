@@ -6,11 +6,24 @@ from pathlib import Path
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(env_path)
 
+def get_openai_api_key():
+    """OpenAI APIキーを取得（StreamlitとEnvの両方をチェック）"""
+    try:
+        import streamlit as st
+        # Streamlit secretsから取得を試行
+        api_key = st.secrets.get("OPENAI_API_KEY")
+        if api_key and api_key != "your-openai-api-key-here":
+            return api_key
+    except:
+        pass
+    # 環境変数から取得
+    return os.getenv("OPENAI_API_KEY")
+
 class Settings:
     """アプリケーション設定クラス"""
-    
+
     # API設定
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    OPENAI_API_KEY = get_openai_api_key()
     
     # GPTモデル設定
     GPT_MODEL = "gpt-4o"

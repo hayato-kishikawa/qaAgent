@@ -148,21 +148,22 @@ class UploadTab:
         """アップロード・設定セクションを描画"""
         result = {
             'uploaded_file': None,
+            'text_content': None,
+            'input_type': None,
             'qa_turns': 10,
             'start_processing': False
         }
 
-        # ファイルアップローダー
-        uploaded_file = self.components.render_file_uploader()
-        result['uploaded_file'] = uploaded_file
+        # 入力オプション（PDF or テキスト）
+        input_result = self.components.render_input_options()
+        result.update(input_result)
 
-        if uploaded_file:
-            st.success(f"✅ ファイルがアップロードされました: {uploaded_file.name}")
-
+        # 何らかの入力がある場合
+        if input_result['input_type']:
             # サイドバー設定を結果に統合
             result.update(sidebar_settings)
 
-            # 文書情報を表示（PDF処理後に情報があれば）
+            # 文書情報を表示（処理後に情報があれば）
             doc_data = st.session_state.get('document_data', {})
             if doc_data:
                 self.components.render_document_info(doc_data)
@@ -185,8 +186,8 @@ class UploadTab:
                     st.session_state['reset_requested'] = True
                     st.rerun()
         else:
-            # ファイルがアップロードされていない場合の詳細説明
-            st.info("📄 PDFファイルをアップロードして、AIエージェントによる文書理解セッションを開始してください")
+            # 入力がない場合の詳細説明
+            st.info("📄 PDFファイルまたはテキストを入力して、AIエージェントによる文書理解セッションを開始してください")
 
             # アプリの特徴
             st.markdown("### ✨ このアプリの特徴")

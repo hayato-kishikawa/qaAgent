@@ -212,4 +212,8 @@ __marimo__/
 /docs
 
 # Streamlit secrets (never commit these)
-.streamlit/secrets.tomlqaAgent_icon.png
+.streamlit/secrets.toml
+.streamlit/
+
+# App specific files
+qaAgent_icon.png

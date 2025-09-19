@@ -9,6 +9,7 @@ from auth import check_password, logout
 # 設定とサービスのインポート
 from config.settings import Settings
 from services.pdf_processor import PDFProcessor
+from services.text_processor import TextProcessor
 from services.kernel_service import KernelService, AgentOrchestrator
 from services.chat_manager import ChatManager, StreamingCallback
 from services.session_manager import SessionManager
@@ -44,6 +45,7 @@ class QAApp:
         try:
             self.kernel_service = KernelService()
             self.pdf_processor = PDFProcessor()
+            self.text_processor = TextProcessor()
             self.chat_manager = ChatManager()
             self.orchestrator = AgentOrchestrator(self.kernel_service)
         except Exception as e:
@@ -97,12 +99,12 @@ class QAApp:
     def _render_main_content(self):
         """メインコンテンツを描画"""
         # メインタブ切り替え
-        main_tab1, main_tab2 = st.tabs(["🚀 Q&Aセッション", "🎯 プロンプト編集"])
-        
+        main_tab1, main_tab2 = st.tabs(["🚀 Q&Aセッション", "👁️ プロンプトプレビュー"])
+
         with main_tab1:
             # セッション状態を取得
             current_step = SessionManager.get_step()
-            
+
             try:
                 if current_step == "upload":
                     self._render_upload_step()
@@ -110,41 +112,175 @@ class QAApp:
                     self._render_processing_step()
                 elif current_step == "qa" or current_step == "completed":
                     self._render_results_step()
-                
+
                 # 処理中の進捗表示のみ（完了後はタブで確認）
                 pass
-            
+
             except Exception as e:
                 st.error(f"アプリケーションエラー: {str(e)}")
                 st.code(traceback.format_exc())
-        
+
         with main_tab2:
-            # プロンプト編集タブ
-            self._render_prompt_editor_tab()
+            # プロンプトプレビュータブ
+            self._render_prompt_preview_tab()
     
-    def _render_prompt_editor_tab(self):
-        """プロンプト編集タブを描画"""
+    def _render_prompt_preview_tab(self):
+        """プロンプトプレビュータブを描画"""
         try:
-            from ui.prompt_editor import PromptEditor
-            prompt_editor = PromptEditor()
-            prompt_editor.render_prompt_editor_tab()
+            self._render_prompt_preview()
         except Exception as e:
-            st.error(f"プロンプトエディタエラー: {str(e)}")
+            st.error(f"プロンプトプレビューエラー: {str(e)}")
+
+    def _render_prompt_preview(self):
+        """現在適用されているプロンプトをプレビュー表示"""
+        st.subheader("👁️ 現在適用中のプロンプト")
+        st.markdown("各エージェントが実際にモデルに送信するプロンプトテキストを確認できます。")
+
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
+
+        # エージェント選択
+        agent_types = {
+            "🎓 学生エージェント": "student",
+            "👨‍🏫 教師エージェント": "teacher",
+            "📋 要約エージェント": "summarizer",
+            "📄 初期要約エージェント": "initial_summarizer"
+        }
+
+        selected_agent = st.selectbox(
+            "エージェントを選択",
+            list(agent_types.keys()),
+            key="prompt_preview_agent_select"
+        )
+
+        agent_type = agent_types[selected_agent]
+        version = "latest"  # 常にlatestを使用
+
+        try:
+            # 実際のエージェントのシステムプロンプトを生成
+            system_prompt = self._generate_system_prompt(agent_type, version)
+
+            st.subheader(f"{selected_agent} - 実際のプロンプトテキスト")
+
+            # システムプロンプト表示
+            with st.expander("🤖 システムプロンプト（モデルに送信される内容）", expanded=True):
+                st.markdown("**このテキストがモデルのシステムメッセージとして送信されます:**")
+                st.code(system_prompt, language="text")
+
+                # 文字数情報
+                char_count = len(system_prompt)
+                st.caption(f"文字数: {char_count:,}文字")
+
+            # サンプルメッセージでの実行例
+            st.divider()
+            st.subheader("💬 実行例プレビュー")
+
+            sample_user_message = st.text_area(
+                "サンプルのユーザーメッセージを入力",
+                value=self._get_sample_message(agent_type),
+                height=100,
+                key=f"sample_message_{agent_type}"
+            )
+
+            if sample_user_message:
+                st.markdown("**モデルに送信される完全なメッセージ:**")
+
+                # 完全なメッセージ構成を表示
+                full_message = f"""システムメッセージ:
+{system_prompt}
+
+ユーザーメッセージ:
+{sample_user_message}"""
+
+                st.code(full_message, language="text")
+
+                total_chars = len(full_message)
+                estimated_tokens = int(total_chars * 0.75)  # 概算
+                st.caption(f"合計文字数: {total_chars:,}文字 | 推定トークン数: {estimated_tokens:,}トークン")
+
+        except Exception as e:
+            st.error(f"プロンプト読み込みエラー: {str(e)}")
+
+    def _generate_system_prompt(self, agent_type: str, version: str) -> str:
+        """エージェントの実際のシステムプロンプトを生成"""
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
+
+        try:
+            prompt_config = prompt_loader.load_prompt(agent_type, version)
+
+            # プロンプトを構築
+            prompt_parts = []
+
+            # Identity セクション
+            if 'identity' in prompt_config:
+                prompt_parts.append("# Identity")
+                for key, value in prompt_config['identity'].items():
+                    prompt_parts.append(f"- {value}")
+                prompt_parts.append("")
+
+            # Instructions セクション
+            if 'instructions' in prompt_config:
+                prompt_parts.append("# Instructions")
+                for key, value in prompt_config['instructions'].items():
+                    prompt_parts.append(f"- {value}")
+                prompt_parts.append("")
+
+            # Format セクション
+            if 'format' in prompt_config:
+                prompt_parts.append("# Output Format")
+                for key, value in prompt_config['format'].items():
+                    prompt_parts.append(f"- {value}")
+                prompt_parts.append("")
+
+            # Examples セクション
+            if 'examples' in prompt_config:
+                prompt_parts.append("# Examples")
+                for key, value in prompt_config['examples'].items():
+                    # example_1 -> example1 の形式に変換
+                    example_num = key.replace('example_', 'example')
+                    prompt_parts.append(f'## {example_num}: "{value}"')
+                prompt_parts.append("")
+
+            return "\n".join(prompt_parts).strip()
+
+        except Exception as e:
+            return f"プロンプト生成エラー: {str(e)}"
+
+    def _get_sample_message(self, agent_type: str) -> str:
+        """エージェント別のサンプルメッセージを返す"""
+        samples = {
+            "student": "この文書の内容について質問を生成してください。\n\n[文書内容]\n機械学習は、人工知能の一分野で、コンピュータがデータから自動的に学習する技術です。",
+            "teacher": "機械学習って何ですか？",
+            "summarizer": "以下の文書とQ&Aセッションの結果から最終レポートを作成してください。\n\n[文書要約]\n機械学習の基礎概念について\n\n[Q&Aペア]\nQ: 機械学習とは何ですか？\nA: データから自動的に学習する技術です。",
+            "initial_summarizer": "以下の文書を要約してください。\n\n[文書内容]\n機械学習は、人工知能の一分野として発展してきた技術分野です..."
+        }
+        return samples.get(agent_type, "サンプルメッセージを入力してください")
     
     def _render_upload_step(self):
         """アップロード・設定ステップを描画"""
         # サイドバー設定を取得（既に描画済み）
         sidebar_settings = getattr(self, '_cached_sidebar_settings', {})
         upload_result = self.upload_tab.render_upload_section(sidebar_settings)
-        
-        if upload_result['start_processing'] and upload_result['uploaded_file']:
-            # ファイル検証
-            validation_result = ValidationUtils.validate_pdf_file(upload_result['uploaded_file'])
-            
-            if not validation_result['is_valid']:
-                st.error(validation_result['error_message'])
+
+        if upload_result['start_processing'] and (upload_result['uploaded_file'] or upload_result['text_content']):
+            # 入力タイプに応じた検証
+            if upload_result['input_type'] == 'pdf' and upload_result['uploaded_file']:
+                # PDFファイル検証
+                validation_result = ValidationUtils.validate_pdf_file(upload_result['uploaded_file'])
+                if not validation_result['is_valid']:
+                    st.error(validation_result['error_message'])
+                    return
+            elif upload_result['input_type'] == 'text' and upload_result['text_content']:
+                # テキスト検証
+                validation_result = self.text_processor.validate_text(upload_result['text_content'])
+                if not validation_result['is_valid']:
+                    st.error(validation_result['error_message'])
+                    return
+            else:
+                st.error("入力内容が不正です。PDFファイルまたはテキストを入力してください。")
                 return
-            
+
             # 処理設定を収集
             processing_settings = {
                 'qa_turns': upload_result['qa_turns'],
@@ -155,15 +291,19 @@ class QAApp:
                 'followup_threshold': upload_result['followup_threshold'],
                 'max_followups': upload_result['max_followups'],
                 'target_keywords': upload_result.get('target_keywords', []),
-                'student_version': upload_result.get('student_version', 'v1_0_0'),
-                'teacher_version': upload_result.get('teacher_version', 'v1_0_0'),
-                'summarizer_version': upload_result.get('summarizer_version', 'v1_0_0'),
-                'initial_summarizer_version': upload_result.get('initial_summarizer_version', 'v1_0_0'),
-                'quick_mode': upload_result.get('quick_mode', False)
+                'student_version': 'latest',
+                'teacher_version': 'latest',
+                'summarizer_version': 'latest',
+                'initial_summarizer_version': 'latest',
+                'quick_mode': upload_result.get('quick_mode', False),
+                'input_type': upload_result['input_type']
             }
-            
+
             # 処理を開始
-            self._start_processing(upload_result['uploaded_file'], processing_settings)
+            if upload_result['input_type'] == 'pdf':
+                self._start_processing(upload_result['uploaded_file'], processing_settings)
+            else:  # text
+                self._start_text_processing(upload_result['text_content'], processing_settings)
     
     def _render_processing_step(self):
         """処理中ステップを描画"""
@@ -270,6 +410,95 @@ class QAApp:
             st.divider()
             self._render_results_step()
             
+        except Exception as e:
+            st.error(f"処理エラー: {str(e)}")
+            SessionManager.stop_processing()
+
+    def _start_text_processing(self, text_content: str, processing_settings: Dict[str, Any]):
+        """テキストの処理を開始"""
+        SessionManager.start_processing()
+        SessionManager.set_qa_turns(processing_settings['qa_turns'])
+
+        # 処理設定をセッションに保存
+        SessionManager.set_processing_settings(processing_settings)
+
+        # エージェント別モデル設定を表示
+        model_info = (
+            f"🎓 学生: {processing_settings['student_model']} | "
+            f"👨‍🏫 教師: {processing_settings['teacher_model']} | "
+            f"📋 要約: {processing_settings['summarizer_model']}"
+        )
+        st.info(f"🤖 {model_info}")
+
+        # 各エージェントのモデルを設定
+        try:
+            self._configure_agent_models(processing_settings)
+        except Exception as e:
+            st.warning(f"モデル設定警告: {str(e)}")
+
+        try:
+            # ステップ1: テキストを処理
+            with st.spinner("📝 テキストを処理中..."):
+                text_data = self.text_processor.process_text(text_content)
+                SessionManager.set_document_data(text_data)
+
+            st.success("✅ テキスト処理完了")
+
+            # 文書情報を表示
+            self.components.render_document_info(text_data)
+
+            # ステップ2: 初期要約を即座に生成・表示
+            with st.spinner("📋 文書要約を生成中..."):
+                initial_summary = asyncio.run(self._generate_initial_summary(text_data['text_content']))
+                SessionManager.set_summary(initial_summary)
+
+            st.success("✅ 要約生成完了")
+            self.components.render_summary_section(initial_summary)
+
+            # 並列処理オプション
+            use_parallel = st.checkbox("⚡ Q&A並列処理を有効にする",
+                                     value=True,
+                                     key="use_parallel_processing_text",
+                                     help="Q&A生成を並列処理して高速化します（推奨）")
+
+            if use_parallel:
+                # Q&Aのみを並列実行
+                with st.spinner("💬 Q&Aセッションを並列実行中..."):
+                    qa_pairs = asyncio.run(self._run_parallel_qa_only(text_data, processing_settings))
+            else:
+                # 従来のQ&A順次処理
+                # ステップ3: Q&Aセッション
+                st.subheader("💬 Q&Aセッション")
+                qa_pairs = self._run_streaming_qa_session(text_data, processing_settings)
+
+            # 結果を表示
+            st.success("✅ 要約・Q&Aセッション完了")
+
+            # ステップ4: 最終レポート生成
+            quick_mode = processing_settings.get('quick_mode', False)
+            if quick_mode:
+                # Quickモードの場合は簡易レポートを生成
+                with st.spinner("💨 簡易レポートを作成中..."):
+                    document_info = SessionManager.get_document_data()
+                    quick_report = UIComponents.generate_quick_report(initial_summary, qa_pairs, document_info)
+                    SessionManager.set_final_report(quick_report)
+                st.success("✅ 処理完了！Quickモードで簡易レポートを生成しました")
+            else:
+                # 通常モードの場合はAI生成レポート
+                with st.spinner("📊 最終レポートを作成中..."):
+                    final_report = asyncio.run(self._generate_final_report(text_data['text_content'], qa_pairs, initial_summary))
+                    SessionManager.set_final_report(final_report)
+                st.success("✅ 処理完了！下のタブで結果をご確認ください")
+
+            # Quickモード情報をセッションに保存
+            st.session_state['quick_mode'] = quick_mode
+            SessionManager.stop_processing()
+            SessionManager.set_step("completed")
+
+            # 完了後にタブを表示
+            st.divider()
+            self._render_results_step()
+
         except Exception as e:
             st.error(f"処理エラー: {str(e)}")
             SessionManager.stop_processing()

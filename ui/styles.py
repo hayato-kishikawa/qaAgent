@@ -99,22 +99,111 @@ class StyleManager:
             background-color: #f8f9fa;
         }
         
-        /* タブのスタイル */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
+        /* メインタブのスタイル - レベル1（最上位） */
+        .stTabs[data-tabs-level="0"] [data-baseweb="tab-list"],
+        .stTabs:not(.stTabs .stTabs) [data-baseweb="tab-list"] {
+            gap: 16px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 12px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            border: 2px solid #dee2e6;
         }
-        
-        .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            padding: 0 24px;
-            background-color: #f1f3f4;
-            border-radius: 8px 8px 0 0;
-            font-weight: 500;
+
+        .stTabs[data-tabs-level="0"] [data-baseweb="tab"],
+        .stTabs:not(.stTabs .stTabs) [data-baseweb="tab"] {
+            height: 56px;
+            padding: 0 32px;
+            background: #ffffff;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 17px;
+            color: #495057;
+            border: 2px solid #dee2e6;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-        
-        .stTabs [aria-selected="true"] {
-            background-color: #007bff;
+
+        .stTabs[data-tabs-level="0"] [data-baseweb="tab"]:hover,
+        .stTabs:not(.stTabs .stTabs) [data-baseweb="tab"]:hover {
+            background: #f8f9fa;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            border-color: #6c757d;
+        }
+
+        .stTabs[data-tabs-level="0"] [aria-selected="true"],
+        .stTabs:not(.stTabs .stTabs) [aria-selected="true"] {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
             color: white;
+            border: 2px solid #0056b3;
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(0,123,255,0.3);
+        }
+
+        .stTabs[data-tabs-level="0"] [aria-selected="true"]:hover,
+        .stTabs:not(.stTabs .stTabs) [aria-selected="true"]:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 40px rgba(0,123,255,0.4);
+        }
+
+        /* メインタブコンテンツエリア */
+        .stTabs[data-tabs-level="0"] [data-baseweb="tab-panel"],
+        .stTabs:not(.stTabs .stTabs) [data-baseweb="tab-panel"] {
+            padding: 32px;
+            background: #ffffff;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            margin-top: -12px;
+            border: 2px solid #dee2e6;
+            border-top: none;
+        }
+
+        /* サブタブのスタイル - レベル2（入力オプション用） */
+        .stTabs .stTabs [data-baseweb="tab-list"] {
+            gap: 6px;
+            background: #f1f3f4;
+            padding: 4px;
+            border-radius: 12px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+            border: 1px solid #dadce0;
+        }
+
+        .stTabs .stTabs [data-baseweb="tab"] {
+            height: 40px;
+            padding: 0 18px;
+            background: #ffffff;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            color: #5f6368;
+            border: 1px solid #dadce0;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stTabs .stTabs [data-baseweb="tab"]:hover {
+            background: #f8f9fa;
+            color: #202124;
+            border-color: #bdc1c6;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+
+        .stTabs .stTabs [aria-selected="true"] {
+            background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+            color: white;
+            border: 1px solid #1557b0;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(26,115,232,0.3);
+        }
+
+        .stTabs .stTabs [aria-selected="true"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(26,115,232,0.4);
         }
         
         /* エキスパンダーのスタイル */

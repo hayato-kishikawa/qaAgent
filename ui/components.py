@@ -49,65 +49,15 @@ class UIComponents:
 
             st.divider()
 
-            # プロンプトバージョン設定
-            st.subheader("🎯 プロンプト設定")
-            prompt_versions = self.render_prompt_version_settings_sidebar()
-
-            st.divider()
-
             # ログアウトボタン
             if st.button("🔓 ログアウト", use_container_width=True):
                 from auth import logout
                 logout()
 
             # 設定を統合して返す
-            settings = {**processing_settings, **qa_settings, **followup_settings, **keyword_settings, **model_settings, **prompt_versions}
+            settings = {**processing_settings, **qa_settings, **followup_settings, **keyword_settings, **model_settings}
             return settings
 
-    def render_prompt_version_settings_sidebar(self) -> Dict[str, str]:
-        """サイドバー用プロンプトバージョン設定を描画"""
-        from prompts.prompt_loader import PromptLoader
-        prompt_loader = PromptLoader()
-
-        versions = {}
-
-        # 学生エージェント
-        student_versions = prompt_loader.get_available_versions("student")
-        versions["student_version"] = st.selectbox(
-            "🎓 学生",
-            student_versions,
-            index=0,
-            key="sidebar_student_version_select"
-        )
-
-        # 先生エージェント
-        teacher_versions = prompt_loader.get_available_versions("teacher")
-        versions["teacher_version"] = st.selectbox(
-            "👨‍🏫 先生",
-            teacher_versions,
-            index=0,
-            key="sidebar_teacher_version_select"
-        )
-
-        # 要約エージェント
-        summarizer_versions = prompt_loader.get_available_versions("summarizer")
-        versions["summarizer_version"] = st.selectbox(
-            "📋 要約",
-            summarizer_versions,
-            index=0,
-            key="sidebar_summarizer_version_select"
-        )
-
-        # 初期要約エージェント
-        initial_summarizer_versions = prompt_loader.get_available_versions("initial_summarizer")
-        versions["initial_summarizer_version"] = st.selectbox(
-            "📄 初期要約",
-            initial_summarizer_versions,
-            index=0,
-            key="sidebar_initial_summarizer_version_select"
-        )
-
-        return versions
 
     def render_processing_mode_sidebar(self) -> Dict[str, Any]:
         """サイドバー用処理モード設定を描画"""
@@ -310,68 +260,58 @@ class UIComponents:
         return selected_model_id
 
     @staticmethod
-    def render_file_uploader() -> Optional[Any]:
-        """ファイルアップローダーを描画"""
-        st.subheader("📄 PDFファイルをアップロード")
-        
-        uploaded_file = st.file_uploader(
-            "PDFファイルを選択してください（最大50MB）",
-            type=['pdf'],
-            help="論文や専門文書のPDFファイルをアップロードしてください"
-        )
-        
-        return uploaded_file
+    def render_input_options() -> Dict[str, Any]:
+        """入力オプション（PDF or テキスト）を描画"""
+        st.subheader("📄 文書を入力")
+
+        # タブで入力方法を選択
+        tab1, tab2 = st.tabs(["📁 PDFファイル", "📝 テキスト貼り付け"])
+
+        result = {
+            'input_type': None,
+            'uploaded_file': None,
+            'text_content': None
+        }
+
+        with tab1:
+            st.markdown("**PDFファイルをアップロード**")
+            uploaded_file = st.file_uploader(
+                "PDFファイルを選択してください（最大50MB）",
+                type=['pdf'],
+                help="論文や専門文書のPDFファイルをアップロードしてください",
+                key="pdf_uploader"
+            )
+
+            if uploaded_file:
+                result['input_type'] = 'pdf'
+                result['uploaded_file'] = uploaded_file
+                st.success(f"✅ PDFファイル: {uploaded_file.name}")
+
+        with tab2:
+            st.markdown("**テキストを直接貼り付け**")
+            text_content = st.text_area(
+                "文書のテキストを貼り付けてください",
+                height=200,
+                placeholder="ここに文書のテキストを貼り付けてください...\n\n論文、記事、レポートなど、どんなテキストでも分析できます。",
+                help="コピー＆ペーストで簡単に文書を入力できます",
+                key="text_input"
+            )
+
+            if text_content and text_content.strip():
+                result['input_type'] = 'text'
+                result['text_content'] = text_content.strip()
+
+                # 文字数のみ表示
+                char_count = len(text_content)
+                st.metric("文字数", f"{char_count:,}")
+
+                if char_count > 500000:  # 50万文字以上で警告
+                    st.warning("⚠️ テキストが長すぎる可能性があります。分割して処理することをお勧めします。")
+                else:
+                    st.success("✅ テキストが入力されました")
+
+        return result
     
-    def render_prompt_version_settings(self) -> Dict[str, str]:
-        """プロンプトバージョン設定を描画"""
-        with st.expander("🎯 プロンプトバージョン設定", expanded=False):
-            from prompts.prompt_loader import PromptLoader
-            prompt_loader = PromptLoader()
-
-            versions = {}
-            agent_types = ["student", "teacher", "summarizer", "initial_summarizer"]
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                # 学生エージェント
-                student_versions = prompt_loader.get_available_versions("student")
-                versions["student_version"] = st.selectbox(
-                    "🎓 学生エージェント",
-                    student_versions,
-                    index=0,
-                    key="student_version_select"
-                )
-
-                # 先生エージェント
-                teacher_versions = prompt_loader.get_available_versions("teacher")
-                versions["teacher_version"] = st.selectbox(
-                    "👨‍🏫 先生エージェント",
-                    teacher_versions,
-                    index=0,
-                    key="teacher_version_select"
-                )
-
-            with col2:
-                # 要約エージェント
-                summarizer_versions = prompt_loader.get_available_versions("summarizer")
-                versions["summarizer_version"] = st.selectbox(
-                    "📋 要約エージェント",
-                    summarizer_versions,
-                    index=0,
-                    key="summarizer_version_select"
-                )
-
-                # 初期要約エージェント
-                initial_summarizer_versions = prompt_loader.get_available_versions("initial_summarizer")
-                versions["initial_summarizer_version"] = st.selectbox(
-                    "📄 初期要約エージェント",
-                    initial_summarizer_versions,
-                    index=0,
-                    key="initial_summarizer_version_select"
-                )
-
-            return versions
 
     def render_qa_settings(self) -> Dict[str, Any]:
         """Q&A設定を描画"""
@@ -539,24 +479,40 @@ class UIComponents:
         """文書情報を表示"""
         if not doc_data:
             return
-            
+
         st.subheader("📋 文書情報")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("ページ数", doc_data.get('page_count', 0))
-        
-        with col2:
-            st.metric("トークン数", f"{doc_data.get('total_tokens', 0):,}")
-        
-        with col3:
-            split_status = "分割済み" if doc_data.get('is_split', False) else "未分割"
-            st.metric("処理状況", split_status)
-        
-        # トークン数による警告
-        if doc_data.get('total_tokens', 0) > 200000:
-            st.warning("⚠️ トークン数が多いため、処理に時間がかかる可能性があります")
+
+        # テキスト入力とPDF入力で表示を分ける
+        source_type = doc_data.get('source_type', 'pdf')
+
+        if source_type == 'text':
+            # テキスト入力の場合は文字数のみ表示
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.metric("文字数", f"{doc_data.get('char_count', 0):,}")
+
+            with col2:
+                split_status = "テキスト入力"
+                st.metric("入力形式", split_status)
+
+        else:
+            # PDF入力の場合は従来の表示
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("ページ数", doc_data.get('page_count', 0))
+
+            with col2:
+                st.metric("トークン数", f"{doc_data.get('total_tokens', 0):,}")
+
+            with col3:
+                split_status = "分割済み" if doc_data.get('is_split', False) else "未分割"
+                st.metric("処理状況", split_status)
+
+            # トークン数による警告
+            if doc_data.get('total_tokens', 0) > 200000:
+                st.warning("⚠️ トークン数が多いため、処理に時間がかかる可能性があります")
     
     @staticmethod
     def render_progress_indicator(show: bool, text: str):
