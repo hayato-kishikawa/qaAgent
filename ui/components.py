@@ -8,9 +8,9 @@ class UIComponents:
     @staticmethod
     def render_header():
         """アプリケーションヘッダーを描画"""
-        st.title("🎓 StudyMate AI - 文書学習アシスタント")
+        st.title("🎓 StudyMateAgent")
         st.markdown("""
-        AIエージェントがあなたの学習パートナーになります。PDFをアップロードして、先生と生徒の対話形式で効果的に理解を深めましょう。
+        PDFをアップロードして、AIエージェントによる対話形式で効果的に理解を深めましょう。
         """)
         st.divider()
     
@@ -43,18 +43,13 @@ class UIComponents:
 
             st.divider()
 
-            # モデル設定
-            st.subheader("🤖 モデル設定")
-            model_settings = self.render_model_settings_sidebar()
-
-            st.divider()
-
             # ログアウトボタン
             if st.button("🔓 ログアウト", use_container_width=True):
                 from auth import logout
                 logout()
 
-            # 設定を統合して返す
+            # 設定を統合して返す（モデル設定は空の辞書）
+            model_settings = {}
             settings = {**processing_settings, **qa_settings, **followup_settings, **keyword_settings, **model_settings}
             return settings
 
@@ -65,7 +60,7 @@ class UIComponents:
 
         # Quickモード設定
         settings['quick_mode'] = st.checkbox(
-            "Quickモード（高速処理）",
+            "Quickモード",
             value=False,
             key="sidebar_quick_mode",
             help="最終レポートをAI生成せず、要約とQ&Aを単純結合して高速化します"
@@ -97,32 +92,133 @@ class UIComponents:
         settings = {}
 
         settings['enable_followup'] = st.checkbox(
-            "有効化",
+            "追加質問機能を有効化",
             value=True,
-            key="sidebar_enable_followup_checkbox"
+            key="sidebar_enable_followup_checkbox",
+            help="学習者の理解度に応じて追加の質問を自動生成します"
         )
 
         if settings['enable_followup']:
-            settings['followup_threshold'] = st.slider(
-                "閾値",
-                min_value=0.1,
-                max_value=1.0,
-                value=0.3,
-                step=0.1,
-                key="sidebar_followup_threshold"
+            # カスタムスタイルのレベル選択カード
+            st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
+            st.markdown("### 📈 追加質問のレベル設定")
+
+            # 3段階のオプション定義
+            threshold_options = {
+                "🔥 積極的": {
+                    "value": 0.2,
+                    "description": "基本的な回答でも追加質問を生成",
+                    "detail": "簡単な答えでも満足せず、より詳しい専門的な説明を求めます",
+                    "color": "#FF6B6B",
+                    "icon": "🔥"
+                },
+                "⚖️ バランス": {
+                    "value": 0.5,
+                    "description": "適度に専門的な回答で追加質問",
+                    "detail": "ある程度詳しい説明があっても、重要な部分はさらに深く掘り下げます",
+                    "color": "#4ECDC4",
+                    "icon": "⚖️"
+                },
+                "🎯 厳選": {
+                    "value": 0.8,
+                    "description": "高度で専門的な回答のみ追加質問",
+                    "detail": "かなり詳細で専門的な説明がされた場合のみ、さらに深い質問を生成します",
+                    "color": "#45B7D1",
+                    "icon": "🎯"
+                }
+            }
+
+            # カスタムラジオボタンスタイル
+            selected_level = st.radio(
+                "追加質問の頻度を選択してください",
+                options=list(threshold_options.keys()),
+                index=1,  # デフォルトは「バランス」
+                key="sidebar_followup_level",
+                help="回答の専門性に応じた追加質問の発生頻度を調整できます"
             )
 
+            # 選択されたレベルの詳細説明をカードで表示
+            selected_config = threshold_options[selected_level]
+
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, {selected_config['color']}15 0%, {selected_config['color']}08 100%);
+                border: 2px solid {selected_config['color']}40;
+                border-radius: 12px;
+                padding: 16px;
+                margin: 12px 0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 8px;
+                ">
+                    <span style="font-size: 24px; margin-right: 12px;">{selected_config['icon']}</span>
+                    <span style="
+                        font-weight: 700;
+                        font-size: 18px;
+                        color: {selected_config['color']};
+                    ">{selected_level.split(' ', 1)[1]}</span>
+                </div>
+                <div style="
+                    font-weight: 600;
+                    color: var(--neutral-700);
+                    margin-bottom: 8px;
+                    font-size: 14px;
+                ">{selected_config['description']}</div>
+                <div style="
+                    color: var(--neutral-600);
+                    font-size: 13px;
+                    line-height: 1.4;
+                ">{selected_config['detail']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 設定値を保存
+            settings['followup_threshold'] = selected_config['value']
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # 最大追加質問数セクション
+            st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
+            st.markdown("### 🔢 最大追加質問数")
+
             settings['max_followups'] = st.slider(
-                "最大数",
-                min_value=0,
+                "1つのトピックにつき最大何問まで追加質問しますか？",
+                min_value=1,
                 max_value=3,
-                value=1,
+                value=1,  # デフォルトは1
                 step=1,
-                key="sidebar_max_followups"
+                key="sidebar_max_followups",
+                help="同じトピックについて生成する追加質問の上限数です"
             )
+
+            # スライダー値の可視化
+            slider_value = settings['max_followups']
+            st.markdown(f"""
+            <div style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, #2E86AB 0%, #A23B72 100%);
+                color: white;
+                border-radius: 12px;
+                padding: 12px 20px;
+                margin-top: 12px;
+                font-weight: 700;
+                font-size: 16px;
+                text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+                box-shadow: 0 4px 12px rgba(46, 134, 171, 0.3);
+            ">
+                📊 設定値: {slider_value}問まで追加質問
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
         else:
-            settings['followup_threshold'] = 0.3
+            settings['followup_threshold'] = 0.5
             settings['max_followups'] = 0
+            st.info("💡 追加質問機能を有効にすると、理解が浅い部分について自動的に詳しく質問を生成します")
 
         return settings
 
@@ -137,11 +233,6 @@ class UIComponents:
             - 指定した単語について**優先的に質問を生成**します
             - 文書中の重要なキーワードを確実に学習できます
             - 専門用語や重要概念の理解を深めるのに効果的です
-
-            **📋 使用例**
-            - 論文: `機械学習, ニューラルネットワーク, 深層学習`
-            - ビジネス文書: `ROI, KPI, ステークホルダー`
-            - 技術文書: `API, データベース, セキュリティ`
 
             **⚠️ 注意点**
             - 単語数はQ&A数より少なくしてください
@@ -683,7 +774,7 @@ class UIComponents:
         report = f"""# AI文書要約・Q&Aセッション レポート
 
 **生成日時**: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}
-**処理モード**: Quickモード（高速処理）
+**処理モード**: Quickモード
 
 ---
 

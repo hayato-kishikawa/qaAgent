@@ -200,7 +200,7 @@ class UploadTab:
                 st.markdown("- 📋 **要約エージェント**: 文書要約と最終レポート作成")
 
             with col2:
-                st.markdown("**📊 学習効果**")
+                st.markdown("**📊  主要機能**")
                 st.markdown("- 💡 **理解促進**: Q&A形式で段階的に理解")
                 st.markdown("- 🔄 **フォローアップ**: 難しい回答には追加説明")
                 st.markdown("- 📝 **レポート**: 学習内容をMarkdown形式で整理")
@@ -218,7 +218,7 @@ class UploadTab:
                 左サイドバーで設定を確認・調整
 
                 **ステップ2: ファイル選択**
-                PDFファイルをドラッグ&ドロップ
+                PDFファイルをドラッグ&ドロップ, またはテキスト入力
 
                 **ステップ3: 実行開始**
                 🚀ボタンでQ&Aセッション開始
@@ -226,46 +226,17 @@ class UploadTab:
 
             with steps_col2:
                 st.markdown("**📋 対応ファイル**")
-                st.markdown("- **形式**: PDFファイルのみ")
+                st.markdown("- **形式**: PDFファイル（.pdf）, テキスト入力")
                 st.markdown("- **サイズ**: 最大50MB")
                 st.markdown("- **内容**: 論文、レポート、マニュアル等の文書")
-                st.markdown("- **言語**: 日本語・英語対応")
 
             with steps_col3:
-                st.markdown("**⚙️ 主な設定項目**")
+                st.markdown("**⚙️ 設定項目**")
                 st.markdown("- **Q&A数**: 1-20回（推奨: 10回）")
-                st.markdown("- **モデル**: GPT-5系から選択可能")
+                st.markdown("- **フォローアップ質問**: 有効/無効")
                 st.markdown("- **重要単語**: 優先的に質問生成する単語指定")
 
             st.divider()
-
-            # 利用シーン
-            st.markdown("### 💼 こんな場面で活用")
-            scenario_col1, scenario_col2, scenario_col3 = st.columns(3)
-
-            with scenario_col1:
-                st.markdown("""
-                **📚 学習・研究**
-                - 論文の理解
-                - 専門書の要点整理
-                - 研究資料の分析
-                """)
-
-            with scenario_col2:
-                st.markdown("""
-                **💼 業務効率化**
-                - 報告書の要約
-                - マニュアルの理解
-                - 技術資料の習得
-                """)
-
-            with scenario_col3:
-                st.markdown("""
-                **🎯 試験対策**
-                - 教材の重要ポイント抽出
-                - 問題集作成の参考
-                - 復習用資料の作成
-                """)
 
             # 注意事項
             st.markdown("### ⚠️ ご利用上の注意")

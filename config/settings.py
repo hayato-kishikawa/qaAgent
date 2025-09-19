@@ -41,7 +41,7 @@ class Settings:
     MAX_FOLLOWUP_QUESTIONS = 3
     
     # Streamlit設定
-    PAGE_TITLE = "StudyMate AI - 文書学習アシスタント"
+    PAGE_TITLE = "StudyMateAgent"
     PAGE_ICON = "🎓"
     LAYOUT = "wide"
     

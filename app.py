@@ -249,9 +249,9 @@ class QAApp:
             # 処理設定を収集
             processing_settings = {
                 'qa_turns': upload_result['qa_turns'],
-                'student_model': upload_result['student_model'],
-                'teacher_model': upload_result['teacher_model'],
-                'summarizer_model': upload_result['summarizer_model'],
+                'student_model': upload_result.get('student_model', 'gpt-5-mini'),
+                'teacher_model': upload_result.get('teacher_model', 'gpt-5'),
+                'summarizer_model': upload_result.get('summarizer_model', 'gpt-5-nano'),
                 'enable_followup': upload_result['enable_followup'],
                 'followup_threshold': upload_result['followup_threshold'],
                 'max_followups': upload_result['max_followups'],
@@ -331,21 +331,9 @@ class QAApp:
             st.success("✅ 要約生成完了")
             self.components.render_summary_section(initial_summary)
             
-            # 並列処理オプション
-            use_parallel = st.checkbox("⚡ Q&A並列処理を有効にする", 
-                                     value=True, 
-                                     key="use_parallel_processing",
-                                     help="Q&A生成を並列処理して高速化します（推奨）")
-            
-            if use_parallel:
-                # Q&Aのみを並列実行
-                with st.spinner("💬 Q&Aセッションを並列実行中..."):
-                    qa_pairs = asyncio.run(self._run_parallel_qa_only(pdf_data, processing_settings))
-            else:
-                # 従来のQ&A順次処理
-                # ステップ3: Q&Aセッション
-                st.subheader("💬 Q&Aセッション")
-                qa_pairs = self._run_streaming_qa_session(pdf_data, processing_settings)
+            # Q&Aのみを並列実行
+            with st.spinner("💬 Q&Aセッションを並列実行中..."):
+                qa_pairs = asyncio.run(self._run_parallel_qa_only(pdf_data, processing_settings))
             
             # 結果を表示
             st.success("✅ 要約・Q&Aセッション完了")
