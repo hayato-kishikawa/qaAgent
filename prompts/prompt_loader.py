@@ -44,54 +44,85 @@ class PromptLoader:
     def get_system_prompt(self, agent_type: str, version: str = "v1_0_0") -> str:
         """
         システムプロンプトを構築して返す
-        
+
         Args:
             agent_type: エージェントタイプ
             version: プロンプトバージョン
-            
+
         Returns:
             システムプロンプト文字列
         """
         prompt_config = self.load_prompt(agent_type, version)
-        
+
         # システムプロンプトを構築
         system_parts = []
-        
-        # system セクション
+
+        # identity セクション（新構造）
+        if 'identity' in prompt_config:
+            identity_section = prompt_config['identity']
+            if 'role' in identity_section:
+                system_parts.append(f"【役割】\n{identity_section['role']}")
+            if 'approach' in identity_section:
+                system_parts.append(f"【アプローチ】\n{identity_section['approach']}")
+            if 'personality' in identity_section:
+                system_parts.append(f"【性格】\n{identity_section['personality']}")
+            if 'curiosity' in identity_section:
+                system_parts.append(f"【好奇心】\n{identity_section['curiosity']}")
+
+        # instructions セクション（新構造）
+        if 'instructions' in prompt_config:
+            system_parts.append("【指示】")
+            for key, value in prompt_config['instructions'].items():
+                system_parts.append(f"- {key}: {value}")
+
+        # format セクション（新構造）
+        if 'format' in prompt_config:
+            system_parts.append("【出力形式】")
+            for key, value in prompt_config['format'].items():
+                system_parts.append(f"- {key}: {value}")
+
+        # examples セクション（新構造）
+        if 'examples' in prompt_config:
+            system_parts.append("【質問例】")
+            for key, value in prompt_config['examples'].items():
+                system_parts.append(f"- {value}")
+
+        # 旧構造との互換性を保持
+        # system セクション（旧構造）
         if 'system' in prompt_config:
             system_parts.append(f"役割: {prompt_config['system'].get('role', '')}")
-        
-        # personality セクション（studentの場合）
+
+        # personality セクション（旧構造、studentの場合）
         if 'personality' in prompt_config:
             system_parts.append("性格:")
             for key, value in prompt_config['personality'].items():
                 system_parts.append(f"- {key}: {value}")
-        
-        # expertise セクション（teacherの場合）
+
+        # expertise セクション（旧構造、teacherの場合）
         if 'expertise' in prompt_config:
             system_parts.append("専門性:")
             for key, value in prompt_config['expertise'].items():
                 system_parts.append(f"- {key}: {value}")
-        
-        # responsibilities セクション（summarizerの場合）
+
+        # responsibilities セクション（旧構造、summarizerの場合）
         if 'responsibilities' in prompt_config:
             system_parts.append("責任:")
             for key, value in prompt_config['responsibilities'].items():
                 system_parts.append(f"- {key}: {value}")
-        
-        # output_format セクション（summarizerの場合）
+
+        # output_format セクション（旧構造、summarizerの場合）
         if 'output_format' in prompt_config:
             system_parts.append("出力形式:")
             for key, value in prompt_config['output_format'].items():
                 system_parts.append(f"- {key}: {value}")
-        
-        # instruction セクション
+
+        # instruction セクション（旧構造）
         if 'instruction' in prompt_config:
             system_parts.append("指示:")
             for key, value in prompt_config['instruction'].items():
                 system_parts.append(f"- {key}: {value}")
-        
-        return "\n".join(system_parts)
+
+        return "\n\n".join(system_parts)
     
     def get_available_versions(self, agent_type: str) -> list:
         """

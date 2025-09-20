@@ -108,20 +108,37 @@ class TabManager:
             timestamp = qa_pair.get('timestamp', '')
             
             with st.expander(f"Q{i}: {question[:50]}...", expanded=False):
-                st.markdown(f"**質問：** {question}")
+                st.markdown(f"**❓ Q{i} (メイン質問):**")
+                st.write(f"{question}")
+
+                st.markdown(f"**💡 A{i}:**")
+                st.write(f"{answer}")
                 
-                # 回答表示
-                st.markdown(f"**回答：** {answer}")
-                
-                # フォローアップ質問をインデントして表示
+                # フォローアップ質問を関連性を明確にして表示
                 followup_question = qa_pair.get('followup_question', '')
                 followup_answer = qa_pair.get('followup_answer', '')
-                
+
                 if followup_question:
-                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**🔄 Q{i}-追加質問:**", unsafe_allow_html=True)
-                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{followup_question}", unsafe_allow_html=True)
-                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**💡 Q{i}-追加回答:**", unsafe_allow_html=True)
-                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{followup_answer}", unsafe_allow_html=True)
+                    st.markdown("""
+                    <div style="
+                        border-left: 3px solid #1f77b4;
+                        padding-left: 15px;
+                        margin-left: 20px;
+                        margin-top: 15px;
+                        background: linear-gradient(90deg, #f8f9ff 0%, #ffffff 100%);
+                        border-radius: 0 8px 8px 0;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                    ">
+                    """, unsafe_allow_html=True)
+
+                    st.markdown(f"**🔄 Q{i+1}-1 (フォローアップ):**")
+                    st.markdown(f"→ {followup_question}")
+
+                    st.markdown(f"**💡 A{i+1}-1:**")
+                    st.markdown(f"→ {followup_answer}")
+
+                    st.markdown("</div>", unsafe_allow_html=True)
                 
                 # キャプション情報（タイムスタンプと専門性スコア）
                 caption_parts = []
@@ -387,27 +404,61 @@ class UploadTab:
 
             st.divider()
 
-            # 実行ボタン
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                start_button = st.button("🚀 実行開始", type="primary", use_container_width=True)
-                result['start_processing'] = start_button
+            # 設定確定と実行ボタン
+            from services.session_manager import SessionManager
+            is_locked = SessionManager.is_settings_locked()
 
-                # 実行ボタンがクリックされた瞬間に設定をロック
-                if start_button:
-                    from services.session_manager import SessionManager
-                    # まだロックされていない場合のみロックと再読み込み
-                    if not SessionManager.is_settings_locked():
+            if not is_locked:
+                # 設定がロックされていない場合：設定確定ボタンを表示
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    confirm_button = st.button("⚙️ 設定を確定", type="secondary", use_container_width=True)
+                    if confirm_button:
                         SessionManager.lock_settings()
-                        st.success("🔄 処理を開始しています...")
-                        st.info("🔒 設定をロックしました")
-                        st.rerun()  # ページを再読み込みして設定の無効化を反映
+                        st.success("✅ 設定を確定しました。実行開始ボタンが表示されます。")
+                        st.rerun()
 
-            with col2:
-                if st.button("🔄 リセット", use_container_width=True):
-                    # セッションリセットのフラグを設定
-                    st.session_state['reset_requested'] = True
-                    st.rerun()
+                with col2:
+                    if st.button("🔄 リセット", use_container_width=True):
+                        # セッションリセットのフラグを設定
+                        st.session_state['reset_requested'] = True
+                        st.rerun()
+
+                result['start_processing'] = False
+                st.info("👆 まず設定を確定してから実行してください")
+
+            else:
+                # 設定がロックされている場合：実行開始ボタンを表示
+                st.info("🔒 設定が確定されました。実行開始できます。")
+
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    start_button = st.button("🚀 実行開始", type="primary", use_container_width=True)
+                    result['start_processing'] = start_button
+
+                with col2:
+                    if st.button("🔄 リセット", use_container_width=True):
+                        # セッションリセットのフラグを設定
+                        st.session_state['reset_requested'] = True
+                        st.rerun()
+
+                # ボタンがクリックされた場合の大きな処理中メッセージ
+                if start_button:
+                    st.markdown("""
+                    <div style="
+                        background: linear-gradient(135deg, #1f77b4 0%, #0068c9 100%);
+                        color: white;
+                        padding: 1.5rem;
+                        border-radius: 12px;
+                        text-align: center;
+                        font-size: 1.2rem;
+                        font-weight: 600;
+                        margin: 1rem 0;
+                        box-shadow: 0 4px 12px rgba(31, 119, 180, 0.3);
+                    ">
+                        🔄 処理を開始しています...
+                    </div>
+                    """, unsafe_allow_html=True)
         else:
             # 入力がない場合の詳細説明
             st.info("📄 PDFファイルまたはテキストを入力して、AIエージェントによる文書理解セッションを開始してください")

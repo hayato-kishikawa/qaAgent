@@ -327,7 +327,8 @@ class UIComponents:
             "重要単語を入力（カンマ区切り）",
             placeholder="例: 機械学習, ニューラルネットワーク, 深層学習",
             key="sidebar_keyword_input",
-            help="これらの単語について優先的に質問が生成されます。複数の単語はカンマで区切ってください。"
+            help="これらの単語について優先的に質問が生成されます。複数の単語はカンマで区切ってください。",
+            disabled=disabled
         )
 
         keywords = []
@@ -609,7 +610,7 @@ class UIComponents:
         return result
     
 
-    def render_qa_settings(self) -> Dict[str, Any]:
+    def render_qa_settings(self, disabled: bool = False) -> Dict[str, Any]:
         """Q&A設定を描画"""
         from services.openai_service import OpenAIService
         
@@ -624,7 +625,8 @@ class UIComponents:
             max_value=20,
             value=10,
             step=1,
-            help="生成するQ&Aペアの数を設定してください"
+            help="生成するQ&Aペアの数を設定してください",
+            disabled=disabled
         )
         
         # エージェント別モデル選択
@@ -725,7 +727,8 @@ class UIComponents:
         keyword_input = st.text_input(
             "重要単語を入力（カンマ区切りで複数入力可能）",
             placeholder="例: 機械学習, ニューラルネットワーク, 深層学習",
-            help="これらの単語について優先的に質問が生成されます"
+            help="これらの単語について優先的に質問が生成されます",
+            disabled=disabled
         )
         
         # 入力された単語をリストに変換

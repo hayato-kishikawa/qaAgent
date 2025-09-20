@@ -1076,17 +1076,21 @@ class QAApp:
                 all_tasks.append(task)
                 section_info.append({"section_index": section_index, "target_keyword": target_keyword})
             
-            # 完了したタスクから順次処理
-            status_text.text(f"全{total_sections}セクションを並列処理中...")
-            
-            for completed_task in asyncio.as_completed(all_tasks):
-                try:
-                    result = await completed_task
+            # 順序を保持して処理（asyncio.gatherを使用）
+            status_text.text(f"全{total_sections}セクションを順序付き並列処理中...")
+
+            try:
+                # 順序を保持しながら並列実行
+                results = await asyncio.gather(*all_tasks, return_exceptions=True)
+
+                for i, result in enumerate(results):
                     completed_count += 1
-                    
-                    if result:
+
+                    if isinstance(result, Exception):
+                        st.error(f"セクション{i+1}処理エラー: {str(result)}")
+                    elif result:
                         qa_pairs.extend(result)
-                        
+
                         # セッションにも追加
                         for qa_pair in result:
                             SessionManager.add_qa_pair(qa_pair['question'], qa_pair['answer'])
@@ -1098,15 +1102,34 @@ class QAApp:
                             for i, qa_pair in enumerate(qa_pairs):
                                 qa_num = i + 1
                                 with st.expander(f"🔍 Q&A {qa_num}: {qa_pair['question'][:50]}...", expanded=False):
-                                    st.write(f"**質問:** {qa_pair['question']}")
-                                    st.write(f"**回答:** {qa_pair['answer']}")
+                                    st.markdown(f"**❓ Q{qa_num} (メイン質問):**")
+                                    st.write(f"{qa_pair['question']}")
+
+                                    st.markdown(f"**💡 A{qa_num}:**")
+                                    st.write(f"{qa_pair['answer']}")
                                     
-                                    # フォローアップ質問をインデントして表示
+                                    # フォローアップ質問を関連性を明確にして表示
                                     if qa_pair.get('followup_question'):
-                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**🔄 Q{qa_num}-追加質問:**", unsafe_allow_html=True)
-                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{qa_pair['followup_question']}", unsafe_allow_html=True)
-                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**💡 Q{qa_num}-追加回答:**", unsafe_allow_html=True)
-                                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{qa_pair['followup_answer']}", unsafe_allow_html=True)
+                                        st.markdown("""
+                                        <div style="
+                                            border-left: 3px solid #1f77b4;
+                                            padding-left: 15px;
+                                            margin-left: 20px;
+                                            margin-top: 15px;
+                                            background: linear-gradient(90deg, #f8f9ff 0%, #ffffff 100%);
+                                            border-radius: 0 8px 8px 0;
+                                            padding-top: 10px;
+                                            padding-bottom: 10px;
+                                        ">
+                                        """, unsafe_allow_html=True)
+
+                                        st.markdown(f"**🔄 Q{qa_num}-1 (フォローアップ):**")
+                                        st.markdown(f"→ {qa_pair['followup_question']}")
+
+                                        st.markdown(f"**💡 A{qa_num}-1:**")
+                                        st.markdown(f"→ {qa_pair['followup_answer']}")
+
+                                        st.markdown("</div>", unsafe_allow_html=True)
                                     
                                     # キャプション情報（セクションと専門性スコア）
                                     caption_parts = []
@@ -1125,12 +1148,9 @@ class QAApp:
                     progress = completed_count / total_sections
                     progress_bar.progress(progress)
                     status_text.text(f"完了: {completed_count}/{total_sections} セクション")
-                    
-                except Exception as e:
-                    st.error(f"セクション処理エラー: {str(e)}")
-                    completed_count += 1
-                    progress = completed_count / total_sections
-                    progress_bar.progress(progress)
+
+            except Exception as e:
+                st.error(f"並列処理エラー: {str(e)}")
             
             # 完了
             progress_bar.progress(1.0)
