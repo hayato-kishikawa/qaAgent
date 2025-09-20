@@ -7,7 +7,7 @@ from semantic_kernel.contents.chat_message_content import AuthorRole
 class StudentAgent(BaseAgent):
     """生徒エージェント - 質問を生成する役割"""
     
-    def __init__(self, kernel_service: KernelService, prompt_version: str = "latest"):
+    def __init__(self, kernel_service: KernelService, prompt_version: str = "simple"):
         self.questions_asked = 0
         self.current_section = 0
         self.document_sections = []
@@ -19,6 +19,13 @@ class StudentAgent(BaseAgent):
     def get_description(self) -> str:
         """エージェントの説明を返す"""
         return "好奇心旺盛で知識欲の強い学生。文書の内容について理解を深めるための質問を生成します。"
+
+    def set_question_level(self, level: str):
+        """質問レベルを動的に設定"""
+        if level in ["simple", "latest"]:
+            self.prompt_version = level
+            # プロンプトを再読み込み
+            self._load_prompt()
     
     def set_document_sections(self, sections: list):
         """文書のセクション分割を設定"""

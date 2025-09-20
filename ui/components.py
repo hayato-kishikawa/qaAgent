@@ -208,6 +208,56 @@ class UIComponents:
             help="生成するQ&Aペアの数を設定します"
         )
 
+        # 質問レベル設定
+        st.markdown("### 📚 質問レベル")
+
+        level_options = {
+            "🔰 簡単": {
+                "value": "simple",
+                "description": "基本的で理解しやすい質問",
+                "detail": "文書の主要なポイントや基本的な仕組みについての質問",
+                "color": "#4CAF50"
+            },
+            "🎓 詳細": {
+                "value": "latest",
+                "description": "専門的で深い理解を求める質問",
+                "detail": "文書の詳細な分析や論理的な関係性についての質問",
+                "color": "#2196F3"
+            }
+        }
+
+        # デフォルトは簡単レベル
+        default_level = "🔰 簡単"
+
+        selected_level = st.radio(
+            "質問の難易度を選択",
+            options=list(level_options.keys()),
+            index=0,  # デフォルトで簡単レベル
+            disabled=disabled,
+            key="sidebar_question_level",
+            help="学生エージェントが生成する質問の難易度を選択します"
+        )
+
+        settings['question_level'] = level_options[selected_level]["value"]
+
+        # 選択されたレベルの説明を表示
+        selected_info = level_options[selected_level]
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, {selected_info['color']}15 0%, {selected_info['color']}08 100%);
+            border: 2px solid {selected_info['color']}40;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+        ">
+            <div style="color: {selected_info['color']}; font-weight: 600; margin-bottom: 8px;">
+                {selected_level}: {selected_info['description']}
+            </div>
+            <div style="color: #666; font-size: 13px; line-height: 1.4;">
+                {selected_info['detail']}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
         return settings
