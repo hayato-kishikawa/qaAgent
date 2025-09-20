@@ -98,42 +98,100 @@ class QAApp:
     
     def _render_main_content(self):
         """メインコンテンツを描画"""
-        # メインタブ切り替え
-        main_tab1, main_tab2 = st.tabs(["🚀 Q&Aセッション", "👁️ プロンプトプレビュー"])
+        # 右上にプロンプトプレビューボタンを配置
+        col1, col2 = st.columns([8, 2])
+        with col2:
+            # カスタムスタイルで薄いグレーのボタンを作成
+            st.markdown("""
+            <style>
+            .stButton > button[kind="secondary"] {
+                background-color: #f8f9fa !important;
+                color: #6c757d !important;
+                border: 1px solid #dee2e6 !important;
+            }
+            .stButton > button[kind="secondary"]:hover {
+                background-color: #e9ecef !important;
+                color: #495057 !important;
+                border: 1px solid #ced4da !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
 
-        with main_tab1:
-            # セッション状態を取得
-            current_step = SessionManager.get_step()
+            if st.button(" プロンプトプレビュー", use_container_width=True, type="secondary"):
+                self._show_prompt_preview_dialog()
 
-            try:
-                if current_step == "upload":
-                    self._render_upload_step()
-                elif current_step == "processing":
-                    self._render_processing_step()
-                elif current_step == "qa" or current_step == "completed":
-                    self._render_results_step()
+        # メインコンテンツ（Q&Aセッションのみ）
+        # セッション状態を取得
+        current_step = SessionManager.get_step()
 
-                # 処理中の進捗表示のみ（完了後はタブで確認）
-                pass
-
-            except Exception as e:
-                st.error(f"アプリケーションエラー: {str(e)}")
-                st.code(traceback.format_exc())
-
-        with main_tab2:
-            # プロンプトプレビュータブ
-            self._render_prompt_preview_tab()
-    
-    def _render_prompt_preview_tab(self):
-        """プロンプトプレビュータブを描画"""
         try:
-            self._render_prompt_preview()
+            if current_step == "upload":
+                self._render_upload_step()
+            elif current_step == "processing":
+                self._render_processing_step()
+            elif current_step == "qa" or current_step == "completed":
+                self._render_results_step()
+
+            # 処理中の進捗表示のみ（完了後はタブで確認）
+            pass
+
+        except Exception as e:
+            st.error(f"アプリケーションエラー: {str(e)}")
+            st.code(traceback.format_exc())
+    
+    @st.dialog(" プロンプトプレビュー")
+    def _show_prompt_preview_dialog(self):
+        """プロンプトプレビューをダイアログで表示"""
+        try:
+            # エージェント選択
+            agent_options = [
+                ("🎓 学生エージェント", "student"),
+                ("👨‍🏫 教師エージェント", "teacher"),
+                ("📋 要約エージェント", "summarizer"),
+                ("📝 初期要約エージェント", "initial_summarizer")
+            ]
+
+            # エージェント選択UI
+            selected_agent_name = st.selectbox(
+                "確認するエージェントを選択してください",
+                options=[name for name, _ in agent_options],
+                index=0
+            )
+
+            # 選択されたエージェントタイプを取得
+            selected_agent_type = next(agent_type for name, agent_type in agent_options
+                                     if name == selected_agent_name)
+
+            # プロンプト表示（常に最新バージョンを使用）
+            selected_version = "latest"
+            with st.expander(f"{selected_agent_name} のプロンプト", expanded=True):
+                system_prompt = self._generate_system_prompt(selected_agent_type, selected_version)
+
+                if system_prompt.startswith("プロンプト生成エラー"):
+                    st.error(system_prompt)
+                else:
+                    # プロンプトをコードブロックで表示
+                    st.code(system_prompt, language="markdown")
+
+                    # 文字数情報
+                    char_count = len(system_prompt)
+                    st.caption(f"文字数: {char_count:,}文字")
+
+            # 閉じるボタン
+            if st.button("閉じる", use_container_width=True):
+                st.rerun()
+
         except Exception as e:
             st.error(f"プロンプトプレビューエラー: {str(e)}")
 
+    def _render_prompt_preview_tab(self):
+        """プロンプトプレビュータブを描画 - 削除済み"""
+        # この機能はポップアップに移行されました
+        pass
+
     def _render_prompt_preview(self):
         """現在適用されているプロンプトをプレビュー表示"""
-        st.subheader("👁️ 現在適用中のプロンプト")
+        st.subheader(" 現在適用中のプロンプト")
         st.markdown("各エージェントが実際にモデルに送信するプロンプトテキストを確認できます。")
 
         from prompts.prompt_loader import PromptLoader

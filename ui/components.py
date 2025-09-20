@@ -12,7 +12,6 @@ class UIComponents:
         st.markdown("""
         PDFをアップロードして、AIエージェントによる対話形式で効果的に理解を深めましょう。
         """)
-        st.divider()
     
     def render_sidebar_settings(self) -> Dict[str, Any]:
         """サイドバーに設定を描画"""
@@ -560,7 +559,6 @@ class UIComponents:
     @staticmethod
     def render_input_options() -> Dict[str, Any]:
         """入力オプション（PDF or テキスト）を描画"""
-        st.subheader("📄 文書を入力")
 
         # タブで入力方法を選択
         tab1, tab2 = st.tabs(["📁 PDFファイル", "📝 テキスト貼り付け"])
