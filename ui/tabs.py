@@ -431,34 +431,85 @@ class UploadTab:
                 # 設定がロックされている場合：実行開始ボタンを表示
                 st.info("🔒 設定が確定されました。実行開始できます。")
 
+                # 実行開始・リセットボタンのグラデーションスタイルを追加
+                st.markdown("""
+                <style>
+                /* 実行開始ボタン（primary）のスタイル */
+                div[data-testid="stButton"] > button[kind="primary"] {
+                    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 50%, #ff4757 100%) !important;
+                    border: 1px solid #ff4757 !important;
+                    border-radius: 12px !important;
+                    color: white !important;
+                    font-weight: 600 !important;
+                    backdrop-filter: blur(10px) !important;
+                    -webkit-backdrop-filter: blur(10px) !important;
+                    box-shadow:
+                        0 4px 15px rgba(255, 75, 87, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                }
+
+                div[data-testid="stButton"] > button[kind="primary"]:hover {
+                    background: linear-gradient(135deg, #ff7675 0%, #fd79a8 50%, #e84393 100%) !important;
+                    transform: translateY(-2px) !important;
+                    box-shadow:
+                        0 6px 20px rgba(255, 75, 87, 0.4),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+                }
+
+                /* リセットボタン（secondary）のスタイル */
+                div[data-testid="stButton"] > button[kind="secondary"] {
+                    background: linear-gradient(135deg, rgba(173, 216, 230, 0.4) 0%, rgba(135, 206, 235, 0.5) 50%, rgba(176, 224, 230, 0.4) 100%) !important;
+                    border: 1px solid rgba(173, 216, 230, 0.6) !important;
+                    border-radius: 12px !important;
+                    color: #2c5aa0 !important;
+                    font-weight: 500 !important;
+                    backdrop-filter: blur(10px) !important;
+                    -webkit-backdrop-filter: blur(10px) !important;
+                    box-shadow:
+                        0 2px 8px rgba(173, 216, 230, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                }
+
+                div[data-testid="stButton"] > button[kind="secondary"]:hover {
+                    background: linear-gradient(135deg, rgba(173, 216, 230, 0.6) 0%, rgba(135, 206, 235, 0.7) 50%, rgba(176, 224, 230, 0.6) 100%) !important;
+                    transform: translateY(-2px) !important;
+                    box-shadow:
+                        0 4px 16px rgba(173, 216, 230, 0.4),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+
                 col1, col2 = st.columns([1, 1])
                 with col1:
                     start_button = st.button("🚀 実行開始", type="primary", use_container_width=True)
-                    result['start_processing'] = start_button
+
+                    # ボタンがクリックされたらセッション状態に保存
+                    if start_button:
+                        st.session_state['start_button_clicked'] = True
+
+                    # セッション状態の値を返す（瞬間的なボタン値ではなく）
+                    result['start_processing'] = start_button or st.session_state.get('start_button_clicked', False)
 
                 with col2:
-                    if st.button("🔄 リセット", use_container_width=True):
+                    if st.button("🔄 リセット", type="secondary", use_container_width=True):
                         # セッションリセットのフラグを設定
                         st.session_state['reset_requested'] = True
+                        # スタートボタンの状態もリセット
+                        if 'start_button_clicked' in st.session_state:
+                            del st.session_state['start_button_clicked']
+                        if 'processing_start_time' in st.session_state:
+                            del st.session_state['processing_start_time']
                         st.rerun()
 
-                # ボタンがクリックされた場合の大きな処理中メッセージ
-                if start_button:
-                    st.markdown("""
-                    <div style="
-                        background: linear-gradient(135deg, #1f77b4 0%, #0068c9 100%);
-                        color: white;
-                        padding: 1.5rem;
-                        border-radius: 12px;
-                        text-align: center;
-                        font-size: 1.2rem;
-                        font-weight: 600;
-                        margin: 1rem 0;
-                        box-shadow: 0 4px 12px rgba(31, 119, 180, 0.3);
-                    ">
-                        🔄 処理を開始しています...
-                    </div>
-                    """, unsafe_allow_html=True)
+                # 処理完了チェック（シンプル）
+                from services.session_manager import SessionManager
+                current_step = SessionManager.get_step()
+
+                if current_step == "completed" and SessionManager.get_final_report():
+                    st.success("✅ 処理が完了しました！下のタブで結果をご確認ください")
         else:
             # 入力がない場合の詳細説明
             st.info("📄 PDFファイルまたはテキストを入力して、AIエージェントによる文書理解セッションを開始してください")

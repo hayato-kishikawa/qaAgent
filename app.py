@@ -370,34 +370,56 @@ class QAApp:
         except Exception as e:
             st.warning(f"モデル設定警告: {str(e)}")
         
+        # 全体進捗表示を作成
+        overall_progress = st.progress(0)
+        overall_status = st.empty()
+        step_info = st.empty()
+
         try:
-            # ステップ1: PDFを処理
+            # ステップ1: PDFを処理 (0-15%)
+            overall_status.text("📄 PDFファイルを処理中...")
+            step_info.text("ステップ 1/4: 文書解析")
+            overall_progress.progress(5)
+
             with st.spinner("📄 PDFファイルを処理中..."):
                 pdf_data = self.pdf_processor.process_pdf(uploaded_file)
                 SessionManager.set_document_data(pdf_data)
-            
+
+            overall_progress.progress(15)
             st.success("✅ PDF処理完了")
-            
+
             # 文書情報を表示
             self.components.render_document_info(pdf_data)
-            
-            # ステップ2: 初期要約を即座に生成・表示
+
+            # ステップ2: 初期要約を生成 (15-35%)
+            overall_status.text("📋 文書要約を生成中...")
+            step_info.text("ステップ 2/4: 要約生成")
+            overall_progress.progress(20)
+
             with st.spinner("📋 文書要約を生成中..."):
                 initial_summary = asyncio.run(self._generate_initial_summary(pdf_data['text_content']))
                 SessionManager.set_summary(initial_summary)
-            
+
+            overall_progress.progress(35)
             st.success("✅ 要約生成完了")
             self.components.render_summary_section(initial_summary)
+
+            # ステップ3: Q&Aセッション実行 (35-85%)
+            overall_status.text("💬 Q&Aセッションを実行中...")
+            step_info.text("ステップ 3/4: Q&A生成")
+            overall_progress.progress(40)
+
+            qa_pairs = asyncio.run(self._run_parallel_qa_only_with_progress(pdf_data, processing_settings, overall_progress, overall_status, step_info, 40, 85))
+
+            overall_progress.progress(85)
+            st.success("✅ Q&Aセッション完了")
             
-            # Q&Aのみを並列実行
-            with st.spinner("💬 Q&Aセッションを並列実行中..."):
-                qa_pairs = asyncio.run(self._run_parallel_qa_only(pdf_data, processing_settings))
-            
-            # 結果を表示
-            st.success("✅ 要約・Q&Aセッション完了")
-            
-            # ステップ4: 最終レポート生成
+            # ステップ4: 最終レポート生成 (85-100%)
             quick_mode = processing_settings.get('quick_mode', False)
+            overall_status.text("📊 最終レポートを作成中...")
+            step_info.text("ステップ 4/4: レポート生成")
+            overall_progress.progress(90)
+
             if quick_mode:
                 # Quickモードの場合は簡易レポートを生成
                 with st.spinner("💨 簡易レポートを作成中..."):
@@ -412,20 +434,34 @@ class QAApp:
                     SessionManager.set_final_report(final_report)
                 st.success("✅ 処理完了！下のタブで結果をご確認ください")
 
+            # 完了
+            overall_progress.progress(100)
+            overall_status.text("🎉 全ての処理が完了しました！")
+            step_info.text("✅ 完了: 要約 + Q&A + レポート")
+
             # Quickモード情報をセッションに保存
             st.session_state['quick_mode'] = quick_mode
             SessionManager.stop_processing()
             SessionManager.unlock_settings()  # 設定ロックを解除
             SessionManager.set_step("completed")
-            
+
             # 完了後にタブを表示
             st.divider()
             self._render_results_step()
-            
+
         except Exception as e:
             st.error(f"処理エラー: {str(e)}")
             SessionManager.stop_processing()
             SessionManager.unlock_settings()  # エラー時も設定ロックを解除
+
+        finally:
+            # 進捗表示をクリア
+            if 'overall_progress' in locals():
+                overall_progress.empty()
+            if 'overall_status' in locals():
+                overall_status.empty()
+            if 'step_info' in locals():
+                step_info.empty()
 
     def _start_text_processing(self, text_content: str, processing_settings: Dict[str, Any]):
         """テキストの処理を開始"""
@@ -449,34 +485,56 @@ class QAApp:
         except Exception as e:
             st.warning(f"モデル設定警告: {str(e)}")
 
+        # 全体進捗表示を作成
+        overall_progress = st.progress(0)
+        overall_status = st.empty()
+        step_info = st.empty()
+
         try:
-            # ステップ1: テキストを処理
+            # ステップ1: テキストを処理 (0-15%)
+            overall_status.text("📝 テキストを処理中...")
+            step_info.text("ステップ 1/4: テキスト解析")
+            overall_progress.progress(5)
+
             with st.spinner("📝 テキストを処理中..."):
                 text_data = self.text_processor.process_text(text_content)
                 SessionManager.set_document_data(text_data)
 
+            overall_progress.progress(15)
             st.success("✅ テキスト処理完了")
 
             # 文書情報を表示
             self.components.render_document_info(text_data)
 
-            # ステップ2: 初期要約を即座に生成・表示
+            # ステップ2: 初期要約を生成 (15-35%)
+            overall_status.text("📋 文書要約を生成中...")
+            step_info.text("ステップ 2/4: 要約生成")
+            overall_progress.progress(20)
+
             with st.spinner("📋 文書要約を生成中..."):
                 initial_summary = asyncio.run(self._generate_initial_summary(text_data['text_content']))
                 SessionManager.set_summary(initial_summary)
 
+            overall_progress.progress(35)
             st.success("✅ 要約生成完了")
             self.components.render_summary_section(initial_summary)
 
-            # Q&Aのみを並列実行
-            with st.spinner("💬 Q&Aセッションを並列実行中..."):
-                qa_pairs = asyncio.run(self._run_parallel_qa_only(text_data, processing_settings))
+            # ステップ3: Q&Aセッション実行 (35-85%)
+            overall_status.text("💬 Q&Aセッションを実行中...")
+            step_info.text("ステップ 3/4: Q&A生成")
+            overall_progress.progress(40)
 
-            # 結果を表示
-            st.success("✅ 要約・Q&Aセッション完了")
+            qa_pairs = asyncio.run(self._run_parallel_qa_only_with_progress(text_data, processing_settings, overall_progress, overall_status, step_info, 40, 85))
 
-            # ステップ4: 最終レポート生成
+            overall_progress.progress(85)
+            st.success("✅ Q&Aセッション完了")
+
+            # ステップ4: 最終レポート生成 (85-100%)
             quick_mode = processing_settings.get('quick_mode', False)
+            overall_status.text("📊 最終レポートを作成中...")
+            step_info.text("ステップ 4/4: レポート生成")
+            overall_progress.progress(90)
+
             if quick_mode:
                 # Quickモードの場合は簡易レポートを生成
                 with st.spinner("💨 簡易レポートを作成中..."):
@@ -490,6 +548,11 @@ class QAApp:
                     final_report = asyncio.run(self._generate_final_report(text_data['text_content'], qa_pairs, initial_summary))
                     SessionManager.set_final_report(final_report)
                 st.success("✅ 処理完了！下のタブで結果をご確認ください")
+
+            # 完了
+            overall_progress.progress(100)
+            overall_status.text("🎉 全ての処理が完了しました！")
+            step_info.text("✅ 完了: 要約 + Q&A + レポート")
 
             # Quickモード情報をセッションに保存
             st.session_state['quick_mode'] = quick_mode
@@ -505,6 +568,15 @@ class QAApp:
             st.error(f"処理エラー: {str(e)}")
             SessionManager.stop_processing()
             SessionManager.unlock_settings()  # エラー時も設定ロックを解除
+
+        finally:
+            # 進捗表示をクリア
+            if 'overall_progress' in locals():
+                overall_progress.empty()
+            if 'overall_status' in locals():
+                overall_status.empty()
+            if 'step_info' in locals():
+                step_info.empty()
     
     async def _run_qa_session(self, pdf_data: Dict[str, Any], qa_turns: int):
         """Q&Aセッションを実行"""
@@ -1049,7 +1121,7 @@ class QAApp:
             # リアルタイム結果表示用のコンテナ
             results_container = st.container()
             with results_container:
-                st.subheader("💬 Q&A結果（リアルタイム表示）")
+                st.subheader("💬 Q&A結果")
                 result_placeholder = st.empty()
             
             qa_pairs = []
@@ -1110,26 +1182,11 @@ class QAApp:
                                     
                                     # フォローアップ質問を関連性を明確にして表示
                                     if qa_pair.get('followup_question'):
-                                        st.markdown("""
-                                        <div style="
-                                            border-left: 3px solid #1f77b4;
-                                            padding-left: 15px;
-                                            margin-left: 20px;
-                                            margin-top: 15px;
-                                            background: linear-gradient(90deg, #f8f9ff 0%, #ffffff 100%);
-                                            border-radius: 0 8px 8px 0;
-                                            padding-top: 10px;
-                                            padding-bottom: 10px;
-                                        ">
-                                        """, unsafe_allow_html=True)
-
                                         st.markdown(f"**🔄 Q{qa_num}-1 (フォローアップ):**")
                                         st.markdown(f"→ {qa_pair['followup_question']}")
 
                                         st.markdown(f"**💡 A{qa_num}-1:**")
                                         st.markdown(f"→ {qa_pair['followup_answer']}")
-
-                                        st.markdown("</div>", unsafe_allow_html=True)
                                     
                                     # キャプション情報（セクションと専門性スコア）
                                     caption_parts = []
@@ -1296,7 +1353,12 @@ class QAApp:
                     followup_pairs = await self._handle_followup_questions_async(
                         section, answer, section_index, previous_qa, followup_threshold, max_followups
                     )
-                    section_qa_pairs.extend(followup_pairs)
+                    # フォローアップ質問があった場合は、メインQ&Aペアに追加
+                    if followup_pairs:
+                        first_followup = followup_pairs[0]  # 最初のフォローアップのみ使用
+                        main_qa_pair["followup_question"] = first_followup["question"]
+                        main_qa_pair["followup_answer"] = first_followup["answer"]
+                        main_qa_pair["complexity_score"] = complexity_score
                     
         except Exception as e:
             st.error(f"セクション{section_index+1}の処理エラー: {str(e)}")
@@ -1375,17 +1437,19 @@ class QAApp:
     async def _generate_followup_question_async(self, current_answer: str) -> str:
         """フォローアップ質問を非同期生成"""
         followup_question_prompt = f"""
-あなたは好奇心旺盛な学習者です。先生の回答が専門的で理解が難しいため、より簡単に説明してもらいたいと思っています。
+あなたは文書をしっかり理解したい学習者です。先生の回答を読んで、その内容についてより深く理解したいと思っています。
 
 先生の回答: {current_answer}
 
-以下の観点でフォローアップ質問を1つ生成してください：
-- 専門用語の意味を問う
-- 具体例を求める
-- より簡単な説明を求める
-- 関連する基本概念の説明を求める
+以下の観点で、回答内容をより深く理解するためのフォローアップ質問を1つ生成してください：
+- 回答で説明された仕組みや原理の詳細
+- 言及された具体例や事例の詳細
+- 影響や結果についてのより具体的な説明
+- 比較や違いについてのより詳しい説明
+- 実際の応用や活用場面の詳細
 
-質問は自然で学習者らしい表現にしてください。
+重要：必ず先生の回答内容に言及されていることについて質問し、全く新しい話題は避けてください。
+質問は「つまり」「要するに」「簡単に言うと」といった表現を使って、親しみやすく質問してください。
 """
         
         return await self.orchestrator.single_agent_invoke(
@@ -1396,22 +1460,219 @@ class QAApp:
     async def _generate_followup_answer_async(self, followup_question: str, section: str) -> str:
         """フォローアップ回答を非同期生成"""
         followup_answer_prompt = f"""
-学習者からフォローアップ質問を受けました。より理解しやすく、親しみやすい説明をしてください。
+学習者からフォローアップ質問を受けました。文書内容に基づいて、より詳細で分かりやすい説明をしてください。
 
 質問: {followup_question}
 文書セクション: {section}
 
 以下を心がけて回答してください：
-- 専門用語は平易な言葉で説明
-- 具体例や比喩を使用
-- 段階的で理解しやすい構成
-- 学習者の知識レベルに合わせた説明
+- 必ず文書に書かれている内容のみを根拠として回答する
+- 「文書によると」「文書では」といった表現で文書根拠を明確にする
+- 文書の該当部分をより詳しく説明し、理解を深める
+- 文書にない内容は推測せず、文書の範囲内で回答する
+- 「つまり」「簡単に言うと」といった表現で分かりやすく説明する
 """
         
         return await self.orchestrator.single_agent_invoke(
             self.teacher_agent.get_agent(),
             followup_answer_prompt
         )
+
+    async def _run_parallel_qa_only_with_progress(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any],
+                                                  overall_progress, overall_status, step_info, start_percent: int, end_percent: int) -> list:
+        """Q&Aセッションのみを並列実行（全体進捗に反映）"""
+        try:
+            # 設定を取得
+            qa_turns = processing_settings['qa_turns']
+            enable_followup = processing_settings['enable_followup']
+            followup_threshold = processing_settings['followup_threshold']
+            max_followups = processing_settings['max_followups']
+            target_keywords = processing_settings.get('target_keywords', [])
+
+            # 使用済み単語を追跡
+            used_keywords = set()
+
+            # 文書をセクションに分割
+            sections = self._split_document(pdf_data['text_content'], qa_turns)
+            self.student_agent.set_document_sections(sections)
+            self.teacher_agent.set_document_content(pdf_data['text_content'])
+
+            # リアルタイム結果表示用のコンテナ
+            results_container = st.container()
+            with results_container:
+                st.subheader("💬 Q&A結果")
+                result_placeholder = st.empty()
+
+                # 初期ローディング表示
+                with result_placeholder.container():
+                    st.markdown("""
+                    <div style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 40px;
+                        background: linear-gradient(90deg, #f8f9ff 0%, #ffffff 100%);
+                        border-radius: 12px;
+                        border: 1px solid rgba(173, 216, 230, 0.3);
+                    ">
+                        <div style="text-align: center;">
+                            <div style="
+                                width: 40px;
+                                height: 40px;
+                                border: 4px solid #e3f2fd;
+                                border-top: 4px solid #1f77b4;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                                margin: 0 auto 15px auto;
+                            "></div>
+                            <p style="
+                                color: #1f77b4;
+                                font-size: 16px;
+                                font-weight: 500;
+                                margin: 0;
+                            ">🤖 AIがQ&Aを生成中...</p>
+                            <p style="
+                                color: #666;
+                                font-size: 14px;
+                                margin: 5px 0 0 0;
+                            ">結果は順次表示されます</p>
+                        </div>
+                    </div>
+                    <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+
+            qa_pairs = []
+            completed_count = 0
+            total_sections = len(sections)
+
+            # 全セクションのタスクを一度に作成
+            all_tasks = []
+            section_info = []
+
+            for section_index, section in enumerate(sections):
+                # 使用する単語を決定
+                target_keyword = None
+                if target_keywords and len(used_keywords) < len(target_keywords):
+                    available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
+                    if available_keywords:
+                        target_keyword = available_keywords[0]
+                        used_keywords.add(target_keyword)
+
+                task = self._process_section_async(section, section_index, [],
+                                                 enable_followup, followup_threshold, max_followups,
+                                                 target_keyword)
+                all_tasks.append(task)
+                section_info.append({"section_index": section_index, "target_keyword": target_keyword})
+
+            # 順序を保持して処理
+            overall_status.text(f"💬 全{total_sections}セクションを順序付き並列処理中...")
+
+            try:
+                # 順序を保持しながら並列実行
+                results = await asyncio.gather(*all_tasks, return_exceptions=True)
+
+                for i, result in enumerate(results):
+                    completed_count += 1
+
+                    if isinstance(result, Exception):
+                        st.error(f"セクション{i+1}処理エラー: {str(result)}")
+                    elif result:
+                        qa_pairs.extend(result)
+
+                        # セッションにも追加
+                        for qa_pair in result:
+                            SessionManager.add_qa_pair(qa_pair['question'], qa_pair['answer'])
+                            if qa_pair.get('followup_question'):
+                                SessionManager.add_qa_pair(qa_pair['followup_question'], qa_pair['followup_answer'])
+
+                        # 累積結果を表示
+                        with result_placeholder.container():
+                            # 完了したQ&Aを表示
+                            for j, qa_pair in enumerate(qa_pairs):
+                                qa_num = j + 1
+                                with st.expander(f"✅ Q&A {qa_num}: {qa_pair['question'][:50]}...", expanded=False):
+                                    st.markdown(f"**❓ Q{qa_num} (メイン質問):**")
+                                    st.write(f"{qa_pair['question']}")
+
+                                    st.markdown(f"**💡 A{qa_num}:**")
+                                    st.write(f"{qa_pair['answer']}")
+
+                                    # フォローアップ質問を関連性を明確にして表示
+                                    if qa_pair.get('followup_question'):
+                                        st.markdown(f"**🔄 Q{qa_num}-1 (フォローアップ):**")
+                                        st.markdown(f"→ {qa_pair['followup_question']}")
+
+                                        st.markdown(f"**💡 A{qa_num}-1:**")
+                                        st.markdown(f"→ {qa_pair['followup_answer']}")
+
+                                    # キャプション情報
+                                    caption_parts = []
+                                    section = qa_pair.get('section', 'N/A')
+                                    if section != 'N/A':
+                                        caption_parts.append(f"セクション: {section}")
+
+                                    complexity_score = qa_pair.get('complexity_score', 'N/A')
+                                    if complexity_score != 'N/A':
+                                        caption_parts.append(f"専門性: {complexity_score}")
+
+                                    if caption_parts:
+                                        st.caption(" | ".join(caption_parts))
+
+                            # 処理中のQ&Aセクションを表示
+                            if completed_count < total_sections:
+                                next_qa_num = len(qa_pairs) + 1
+                                with st.expander(f"🔄 Q&A {next_qa_num}: 生成中...", expanded=True):
+                                    st.markdown("""
+                                    <div style="
+                                        display: flex;
+                                        align-items: center;
+                                        padding: 20px;
+                                        background: linear-gradient(90deg, #fff8e1 0%, #ffffff 100%);
+                                        border-radius: 8px;
+                                        border-left: 4px solid #ffa726;
+                                    ">
+                                        <div style="
+                                            width: 24px;
+                                            height: 24px;
+                                            border: 3px solid #fff3e0;
+                                            border-top: 3px solid #ffa726;
+                                            border-radius: 50%;
+                                            animation: spin 1s linear infinite;
+                                            margin-right: 15px;
+                                        "></div>
+                                        <div>
+                                            <p style="
+                                                color: #f57c00;
+                                                font-weight: 500;
+                                                margin: 0;
+                                                font-size: 14px;
+                                            ">🤖 AIが質問と回答を生成中...</p>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                    # 全体進捗を更新
+                    progress_percent = start_percent + (end_percent - start_percent) * (completed_count / total_sections)
+                    overall_progress.progress(int(progress_percent))
+                    overall_status.text(f"💬 Q&A完了: {completed_count}/{total_sections} セクション")
+                    step_info.text(f"ステップ 3/4: Q&A生成 ({completed_count}/{total_sections})")
+
+            except Exception as e:
+                st.error(f"並列処理エラー: {str(e)}")
+
+            # 完了
+            overall_status.text(f"✅ Q&Aセッション完了！{len(qa_pairs)}ペア生成")
+
+            return qa_pairs
+
+        except Exception as e:
+            st.error(f"Q&A並列処理エラー: {str(e)}")
+            return []
 
 def main():
     """メイン実行関数"""

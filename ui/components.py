@@ -54,6 +54,53 @@ class UIComponents:
 
                 st.divider()
 
+            # リセットボタンのスタイルを追加
+            st.markdown("""
+            <style>
+            /* サイドバーリセットボタンのスタイル */
+            div[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+                background: linear-gradient(135deg, rgba(173, 216, 230, 0.4) 0%, rgba(135, 206, 235, 0.5) 50%, rgba(176, 224, 230, 0.4) 100%) !important;
+                border: 1px solid rgba(173, 216, 230, 0.6) !important;
+                border-radius: 12px !important;
+                color: #2c5aa0 !important;
+                font-weight: 500 !important;
+                backdrop-filter: blur(10px) !important;
+                -webkit-backdrop-filter: blur(10px) !important;
+                box-shadow:
+                    0 2px 8px rgba(173, 216, 230, 0.3),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            }
+
+            div[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
+                background: linear-gradient(135deg, rgba(173, 216, 230, 0.6) 0%, rgba(135, 206, 235, 0.7) 50%, rgba(176, 224, 230, 0.6) 100%) !important;
+                transform: translateY(-2px) !important;
+                box-shadow:
+                    0 4px 16px rgba(173, 216, 230, 0.4),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            # リセットボタン（常時表示）
+            if st.button("🔄 セッションをリセット", use_container_width=True, help="すべての設定と処理状態を初期化します"):
+                from services.session_manager import SessionManager
+                # 認証状態を保持
+                password_correct = st.session_state.get("password_correct", False)
+
+                # セッション全体をリセット
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+
+                # 認証状態を復元（ログイン済み状態を維持）
+                st.session_state["password_correct"] = password_correct
+
+                SessionManager.initialize_session()
+                SessionManager.unlock_settings()  # 設定ロックも解除
+                SessionManager.stop_processing()  # 処理状態もリセット
+                st.success("✅ セッションをリセットしました")
+                st.rerun()
+
             # ログアウトボタン
             if st.button("🔓 ログアウト", use_container_width=True):
                 from auth import logout
@@ -560,6 +607,63 @@ class UIComponents:
     @staticmethod
     def render_input_options() -> Dict[str, Any]:
         """入力オプション（PDF or テキスト）を描画"""
+
+        # 薄い水色ガラス風タブスタイルを追加
+        st.markdown("""
+        <style>
+        /* Streamlit標準タブのスタイリング */
+        div[data-testid="stTabs"] > div[data-baseweb="tab-list"] {
+            gap: 8px !important;
+            display: flex !important;
+        }
+
+        div[data-testid="stTabs"] > div[data-baseweb="tab-list"] > button {
+            background: linear-gradient(135deg, rgba(173, 216, 230, 0.4) 0%, rgba(135, 206, 235, 0.5) 50%, rgba(176, 224, 230, 0.4) 100%) !important;
+            border: 1px solid rgba(173, 216, 230, 0.6) !important;
+            border-radius: 12px !important;
+            color: #2c5aa0 !important;
+            font-weight: 500 !important;
+            padding: 10px 20px !important;
+            margin: 0 4px !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+            box-shadow:
+                0 2px 8px rgba(173, 216, 230, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                0 1px 3px rgba(0, 0, 0, 0.1) !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            position: relative !important;
+        }
+
+        div[data-testid="stTabs"] > div[data-baseweb="tab-list"] > button:hover {
+            background: linear-gradient(135deg, rgba(173, 216, 230, 0.6) 0%, rgba(135, 206, 235, 0.7) 50%, rgba(176, 224, 230, 0.6) 100%) !important;
+            transform: translateY(-2px) !important;
+            box-shadow:
+                0 4px 16px rgba(173, 216, 230, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3),
+                0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        }
+
+        div[data-testid="stTabs"] > div[data-baseweb="tab-list"] > button[aria-selected="true"] {
+            background: linear-gradient(135deg, rgba(173, 216, 230, 0.7) 0%, rgba(135, 206, 235, 0.8) 50%, rgba(176, 224, 230, 0.7) 100%) !important;
+            border: 1px solid rgba(135, 206, 235, 0.8) !important;
+            color: #1e3a8a !important;
+            font-weight: 600 !important;
+            transform: translateY(-1px) !important;
+            box-shadow:
+                0 6px 20px rgba(173, 216, 230, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.4),
+                0 3px 12px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        /* タブコンテンツのスタイリング */
+        div[data-testid="stTabs"] > div[data-baseweb="tab-panel"] {
+            padding-top: 20px !important;
+            border-top: 1px solid rgba(173, 216, 230, 0.3) !important;
+            margin-top: 10px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
         # タブで入力方法を選択
         tab1, tab2 = st.tabs(["📁 PDFファイル", "📝 テキスト貼り付け"])
