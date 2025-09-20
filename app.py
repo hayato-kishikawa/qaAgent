@@ -54,8 +54,8 @@ class QAApp:
         
         # エージェントの初期化
         try:
-            # 学生エージェントは質問レベルを動的に設定するため、簡単レベルで初期化
-            self.student_agent = StudentAgent(self.kernel_service, "simple")
+            # 学生エージェントは質問レベルを動的に設定するため、超初心者レベルで初期化
+            self.student_agent = StudentAgent(self.kernel_service, "beginner")
             self.teacher_agent = TeacherAgent(self.kernel_service)
             self.initial_summarizer_agent = InitialSummarizerAgent(self.kernel_service)  # 初期要約専用
             self.summarizer_agent = SummarizerAgent(self.kernel_service)  # 最終レポート専用
@@ -1489,7 +1489,7 @@ class QAApp:
             followup_threshold = processing_settings['followup_threshold']
             max_followups = processing_settings['max_followups']
             target_keywords = processing_settings.get('target_keywords', [])
-            question_level = processing_settings.get('question_level', 'simple')
+            question_level = processing_settings.get('question_level', 'beginner')
 
             # 学生エージェントの質問レベルを設定
             self.student_agent.set_question_level(question_level)
