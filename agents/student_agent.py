@@ -24,8 +24,8 @@ class StudentAgent(BaseAgent):
         """質問レベルを動的に設定"""
         if level in ["simple", "latest"]:
             self.prompt_version = level
-            # プロンプトを再読み込み
-            self._load_prompt()
+            # エージェントを再初期化してプロンプトを再読み込み
+            self._initialize_agent()
     
     def set_document_sections(self, sections: list):
         """文書のセクション分割を設定"""
