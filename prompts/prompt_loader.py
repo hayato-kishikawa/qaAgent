@@ -4,40 +4,56 @@ from typing import Dict, Any
 
 class PromptLoader:
     """プロンプトファイル（.ini形式）を読み込むユーティリティクラス"""
-    
+
     def __init__(self, prompts_dir: str = "prompts"):
         self.prompts_dir = prompts_dir
+        self._cache = {}  # プロンプトキャッシュ
+        self._file_timestamps = {}  # ファイルタイムスタンプキャッシュ
     
     def load_prompt(self, agent_type: str, version: str = "v1_0_0") -> Dict[str, Any]:
         """
         指定されたエージェントタイプとバージョンのプロンプトを読み込む
-        
+
         Args:
             agent_type: エージェントタイプ（student, teacher, summarizer）
             version: プロンプトバージョン（"v1_0_0", "v2_0_0" など）
-            
+
         Returns:
             プロンプト設定の辞書
         """
         prompt_path = os.path.join(self.prompts_dir, agent_type, f"{version}.ini")
-        
+        cache_key = f"{agent_type}_{version}"
+
         if not os.path.exists(prompt_path):
             raise FileNotFoundError(f"プロンプトファイルが見つかりません: {prompt_path}")
-        
+
+        # ファイルの更新時刻を確認
+        current_mtime = os.path.getmtime(prompt_path)
+
+        # キャッシュが存在し、ファイルが更新されていない場合はキャッシュを返す
+        if (cache_key in self._cache and
+            cache_key in self._file_timestamps and
+            self._file_timestamps[cache_key] == current_mtime):
+            return self._cache[cache_key]
+
         try:
             config = configparser.ConfigParser()
             config.read(prompt_path, encoding='utf-8')
-            
+
             if not config.sections():
                 raise ValueError(f"プロンプトファイルが空または不正な形式です: {prompt_path}")
-            
+
             # ConfigParserの内容を辞書に変換
             prompt_dict = {}
             for section in config.sections():
                 prompt_dict[section] = dict(config.items(section))
-            
+
+            # キャッシュに保存
+            self._cache[cache_key] = prompt_dict
+            self._file_timestamps[cache_key] = current_mtime
+
             return prompt_dict
-            
+
         except Exception as e:
             raise RuntimeError(f"プロンプトファイルの読み込みエラー ({prompt_path}): {str(e)}")
     
@@ -52,6 +68,12 @@ class PromptLoader:
         Returns:
             システムプロンプト文字列
         """
+        system_cache_key = f"system_{agent_type}_{version}"
+
+        # システムプロンプトのキャッシュを確認
+        if system_cache_key in self._cache:
+            return self._cache[system_cache_key]
+
         prompt_config = self.load_prompt(agent_type, version)
 
         # システムプロンプトを構築
@@ -122,7 +144,12 @@ class PromptLoader:
             for key, value in prompt_config['instruction'].items():
                 system_parts.append(f"- {key}: {value}")
 
-        return "\n\n".join(system_parts)
+        system_prompt = "\n\n".join(system_parts)
+
+        # システムプロンプトをキャッシュに保存
+        self._cache[system_cache_key] = system_prompt
+
+        return system_prompt
     
     def get_available_versions(self, agent_type: str) -> list:
         """

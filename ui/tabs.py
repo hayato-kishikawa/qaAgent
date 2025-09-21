@@ -107,38 +107,30 @@ class TabManager:
             answer = qa_pair.get('answer', '回答なし')
             timestamp = qa_pair.get('timestamp', '')
             
-            with st.expander(f"Q{i}: {question[:50]}...", expanded=False):
+            # フォローアップがある場合はタイトルに含める
+            expander_title = f"Q{i}: {question[:50]}..."
+            if qa_pair.get('followup_question'):
+                expander_title = f"Q{i}: {question[:30]}... (+フォローアップ)"
+
+            with st.expander(expander_title, expanded=False):
                 st.markdown(f"**❓ Q{i} (メイン質問):**")
                 st.write(f"{question}")
 
                 st.markdown(f"**💡 A{i}:**")
                 st.write(f"{answer}")
-                
+
                 # フォローアップ質問を関連性を明確にして表示
                 followup_question = qa_pair.get('followup_question', '')
                 followup_answer = qa_pair.get('followup_answer', '')
 
                 if followup_question:
-                    st.markdown("""
-                    <div style="
-                        border-left: 3px solid #1f77b4;
-                        padding-left: 15px;
-                        margin-left: 20px;
-                        margin-top: 15px;
-                        background: linear-gradient(90deg, #f8f9ff 0%, #ffffff 100%);
-                        border-radius: 0 8px 8px 0;
-                        padding-top: 10px;
-                        padding-bottom: 10px;
-                    ">
-                    """, unsafe_allow_html=True)
+                    st.markdown("---")  # 区切り線
 
-                    st.markdown(f"**🔄 Q{i+1}-1 (フォローアップ):**")
-                    st.markdown(f"→ {followup_question}")
+                    st.markdown(f"**🔄 Q{i}-1 (フォローアップ):**")
+                    st.write(followup_question)
 
-                    st.markdown(f"**💡 A{i+1}-1:**")
-                    st.markdown(f"→ {followup_answer}")
-
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    st.markdown(f"**💡 A{i}-1:**")
+                    st.write(followup_answer)
                 
                 # キャプション情報（タイムスタンプと専門性スコア）
                 caption_parts = []
@@ -276,6 +268,16 @@ class TabManager:
         if document_data:
             input_type = document_data.get('input_type', 'unknown')
             text_content = document_data.get('text_content', '')
+            raw_content = document_data.get('raw_content')
+
+            # デバッグ情報を表示
+            with st.expander("🔍 デバッグ情報", expanded=False):
+                st.write(f"**入力タイプ:** {input_type}")
+                st.write(f"**テキスト内容:** {'あり' if text_content else 'なし'}")
+                st.write(f"**生データ:** {'あり' if raw_content else 'なし'}")
+                st.write(f"**生データタイプ:** {type(raw_content) if raw_content else 'None'}")
+                if raw_content and isinstance(raw_content, bytes):
+                    st.write(f"**生データサイズ:** {len(raw_content)} bytes")
 
             # PDFビューアー表示（PDFの場合）
             if input_type == 'pdf' and document_data.get('raw_content'):
@@ -580,31 +582,18 @@ class ProcessingTab:
         self.components = UIComponents()
     
     def render_processing_status(self, current_step: str, progress_text: str = ""):
-        """処理状況を表示"""
-        st.subheader("🔄 処理中...")
-        
-        # プログレスバー
-        progress_steps = {
-            "pdf_processing": 0.2,
-            "summary_generation": 0.4,
-            "qa_session": 0.8,
-            "final_report": 1.0
-        }
-        
-        current_progress = progress_steps.get(current_step, 0.1)
-        progress_bar = st.progress(current_progress)
-        
-        # ステップ表示
+        """処理状況を表示（軽量版）"""
+        # シンプルなステップ表示
         step_descriptions = {
             "pdf_processing": "📄 PDFファイルを処理中...",
             "summary_generation": "📋 文書要約を生成中...",
             "qa_session": "💬 Q&Aセッションを実行中...",
             "final_report": "📊 最終レポートを作成中..."
         }
-        
+
         current_step_text = step_descriptions.get(current_step, "処理中...")
         st.info(current_step_text)
-        
+
         if progress_text:
             st.caption(progress_text)
         

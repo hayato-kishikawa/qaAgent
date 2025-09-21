@@ -48,21 +48,81 @@ class QAApp:
             self.text_processor = TextProcessor()
             self.chat_manager = ChatManager()
             self.orchestrator = AgentOrchestrator(self.kernel_service)
+
+            # エージェントの事前初期化（最初のアクセス時のみ）
+            self._agents_initialized = False
+            self.student_agent = None
+            self.teacher_agent = None
+            self.initial_summarizer_agent = None
+            self.summarizer_agent = None
+
         except Exception as e:
             self.initialization_error = f"サービスの初期化に失敗しました: {str(e)}"
             return
         
-        # エージェントの初期化
-        try:
-            # 学生エージェントは質問レベルを動的に設定するため、超初心者レベルで初期化
-            self.student_agent = StudentAgent(self.kernel_service, "beginner")
-            self.teacher_agent = TeacherAgent(self.kernel_service)
-            self.initial_summarizer_agent = InitialSummarizerAgent(self.kernel_service)  # 初期要約専用
-            self.summarizer_agent = SummarizerAgent(self.kernel_service)  # 最終レポート専用
-        except Exception as e:
-            self.initialization_error = f"エージェントの初期化に失敗しました: {str(e)}"
+    def _initialize_agents_lazy(self, question_level: str = "simple"):
+        """エージェントの遅延初期化"""
+        if self._agents_initialized and self.student_agent is not None:
             return
-    
+
+        try:
+            # 学生エージェントは質問レベルを動的に設定するため、指定レベルで初期化
+            self.student_agent = StudentAgent(self.kernel_service, question_level)
+            self.teacher_agent = TeacherAgent(self.kernel_service)
+            self.initial_summarizer_agent = InitialSummarizerAgent(self.kernel_service)
+            self.summarizer_agent = SummarizerAgent(self.kernel_service)
+
+            # 初期化成功を確認
+            required_agents = [self.student_agent, self.teacher_agent, self.initial_summarizer_agent, self.summarizer_agent]
+            if all(agent is not None for agent in required_agents):
+                self._agents_initialized = True
+                st.success("✅ 全エージェントの初期化完了")
+            else:
+                failed_agents = []
+                if not self.student_agent: failed_agents.append("学生エージェント")
+                if not self.teacher_agent: failed_agents.append("教師エージェント")
+                if not self.initial_summarizer_agent: failed_agents.append("初期要約エージェント")
+                if not self.summarizer_agent: failed_agents.append("要約エージェント")
+                raise Exception(f"以下のエージェントの初期化に失敗: {', '.join(failed_agents)}")
+
+        except Exception as e:
+            st.error(f"エージェントの初期化に失敗しました: {str(e)}")
+            self._agents_initialized = False
+            # フォールバック: 従来の方法で再試行
+            self._fallback_agent_initialization(question_level)
+
+    def _fallback_agent_initialization(self, question_level: str = "simple"):
+        """フォールバック用のエージェント初期化"""
+        try:
+            st.warning("エージェントをフォールバックモードで初期化中...")
+
+            # 従来の直接初期化を試行
+            from agents.student_agent import StudentAgent
+            from agents.teacher_agent import TeacherAgent
+            from agents.initial_summarizer_agent import InitialSummarizerAgent
+            from agents.summarizer_agent import SummarizerAgent
+
+            self.student_agent = StudentAgent(self.kernel_service, question_level)
+            self.teacher_agent = TeacherAgent(self.kernel_service)
+            self.initial_summarizer_agent = InitialSummarizerAgent(self.kernel_service)
+            self.summarizer_agent = SummarizerAgent(self.kernel_service)
+
+            required_agents = [self.student_agent, self.teacher_agent, self.initial_summarizer_agent, self.summarizer_agent]
+            if all(agent is not None for agent in required_agents):
+                self._agents_initialized = True
+                st.success("✅ フォールバックモードでエージェント初期化完了")
+            else:
+                failed_agents = []
+                if not self.student_agent: failed_agents.append("学生エージェント")
+                if not self.teacher_agent: failed_agents.append("教師エージェント")
+                if not self.initial_summarizer_agent: failed_agents.append("初期要約エージェント")
+                if not self.summarizer_agent: failed_agents.append("要約エージェント")
+                st.error(f"フォールバックモードでも初期化に失敗: {', '.join(failed_agents)}")
+
+        except Exception as e:
+            st.error(f"フォールバックエージェント初期化エラー: {str(e)}")
+            self._agents_initialized = False
+
     def run(self):
         """アプリケーションを実行"""
         # ページ設定
@@ -364,13 +424,19 @@ class QAApp:
             f"📋 要約: {processing_settings['summarizer_model']}"
         )
         st.info(f"🤖 {model_info}")
-        
-        # 各エージェントのモデルを設定
+
+        # エージェント初期化とモデル設定
         try:
-            self._configure_agent_models(processing_settings)
+            question_level = processing_settings.get('question_level', 'simple')
+            self._initialize_agents_lazy(question_level)
+
+            if self._agents_initialized:
+                self._configure_agent_models(processing_settings)
+            else:
+                st.warning("エージェントの初期化に失敗しました。デフォルト設定で続行します。")
         except Exception as e:
             st.warning(f"モデル設定警告: {str(e)}")
-        
+
         # 全体進捗表示を作成
         overall_progress = st.progress(0)
         overall_status = st.empty()
@@ -480,9 +546,15 @@ class QAApp:
         )
         st.info(f"🤖 {model_info}")
 
-        # 各エージェントのモデルを設定
+        # エージェント初期化とモデル設定
         try:
-            self._configure_agent_models(processing_settings)
+            question_level = processing_settings.get('question_level', 'simple')
+            self._initialize_agents_lazy(question_level)
+
+            if self._agents_initialized:
+                self._configure_agent_models(processing_settings)
+            else:
+                st.warning("エージェントの初期化に失敗しました。デフォルト設定で続行します。")
         except Exception as e:
             st.warning(f"モデル設定警告: {str(e)}")
 
@@ -629,47 +701,38 @@ class QAApp:
             return f"要約生成エラー: {str(e)}"
     
     def _split_document(self, content: str, qa_turns: int) -> list:
-        """文書をセクションに分割（設定値通りの数を確保）"""
-        # 段落ベースで分割
-        paragraphs = [p.strip() for p in content.split('\\n\\n') if p.strip()]
+        """文書をセクションに分割（最適化版）"""
+        # 改行による段落分割（効率的な文字列処理）
+        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
 
-        # 段落がない場合は文書全体を使用
+        # 段落がない場合は改行で分割
         if not paragraphs:
-            paragraphs = [content.strip()]
+            paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
 
-        sections = []
+        # それでも空の場合は文書全体を使用
+        if not paragraphs:
+            return [content.strip()] * min(qa_turns, 3)  # 最大3セクションに制限
 
-        # 段落数が質問数より少ない場合は、文書全体を繰り返し使用
-        if len(paragraphs) < qa_turns:
-            # 各質問に対して文書全体または最適な部分を割り当て
+        # 効率的なセクション作成
+        if len(paragraphs) >= qa_turns:
+            # 段落数が十分な場合は均等分散
+            step = len(paragraphs) // qa_turns
+            sections = []
             for i in range(qa_turns):
-                if i < len(paragraphs):
-                    # 利用可能な段落がある場合はそれを使用
-                    sections.append(paragraphs[i])
-                else:
-                    # 段落が足りない場合は文書全体を使用
-                    sections.append(content.strip())
+                start_idx = i * step
+                end_idx = min((i + 1) * step, len(paragraphs))
+                section_paragraphs = paragraphs[start_idx:end_idx]
+                sections.append('\n\n'.join(section_paragraphs))
+            return sections
         else:
-            # 通常の分割処理（段落数 >= 質問数）
-            section_size = max(1, len(paragraphs) // qa_turns)
-
-            for i in range(qa_turns):
-                start_idx = i * section_size
-                end_idx = min(start_idx + section_size, len(paragraphs))
-
-                # 最後のセクションには残りの段落も含める
-                if i == qa_turns - 1:
-                    end_idx = len(paragraphs)
-
-                section = '\\n\\n'.join(paragraphs[start_idx:end_idx])
-                sections.append(section)
-
-        # 必ず指定された数のセクションを返す
-        while len(sections) < qa_turns:
-            # 不足分は文書全体で補完
-            sections.append(content.strip())
-
-        return sections[:qa_turns]
+            # 段落数が少ない場合の最適化
+            sections = paragraphs.copy()
+            # 不足分は重要な段落を再利用
+            while len(sections) < qa_turns:
+                # 最も長い段落を優先的に再利用
+                longest_para = max(paragraphs, key=len)
+                sections.append(longest_para)
+            return sections[:qa_turns]
     
     async def _execute_qa_loop(self, sections: list, qa_turns: int) -> list:
         """Q&Aループを実行"""
@@ -948,6 +1011,17 @@ class QAApp:
     async def _run_parallel_summary_and_qa(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> tuple:
         """要約とQ&Aセッションを並列実行し、要約は完了次第すぐに表示"""
         try:
+            # エージェントの遅延初期化
+            question_level = processing_settings.get('question_level', 'simple')
+            self._initialize_agents_lazy(question_level)
+
+            # 初期化確認してからモデル設定
+            if self._agents_initialized:
+                self._configure_agent_models(processing_settings)
+            else:
+                st.error("エージェントの初期化に失敗しました。処理を中止します。")
+                return "", []
+
             # 即時フィードバック（100ms以内）
             st.success("🚀 処理開始 - 文書を解析しています...")
             
@@ -1030,9 +1104,26 @@ class QAApp:
                 
                 # Q&Aペアを一つずつ表示
                 for i, qa_pair in enumerate(qa_pairs, 1):
-                    with st.expander(f"Q{i}: {qa_pair['question'][:50]}...", expanded=False):
-                        st.markdown(f"**質問：** {qa_pair['question']}")
-                        st.markdown(f"**回答：** {qa_pair['answer']}")
+                    # フォローアップがある場合はタイトルに含める
+                    expander_title = f"Q{i}: {qa_pair['question'][:50]}..."
+                    if qa_pair.get('followup_question'):
+                        expander_title = f"Q{i}: {qa_pair['question'][:30]}... (+フォローアップ)"
+
+                    with st.expander(expander_title, expanded=True):
+                        st.markdown(f"**❓ Q{i} (メイン質問):**")
+                        st.write(qa_pair['question'])
+
+                        st.markdown(f"**💡 A{i}:**")
+                        st.write(qa_pair['answer'])
+
+                        # フォローアップ質問を表示
+                        if qa_pair.get('followup_question'):
+                            st.markdown("---")
+                            st.markdown(f"**❓ Q{i}-1 (フォローアップ):**")
+                            st.write(qa_pair['followup_question'])
+
+                            st.markdown(f"**💡 A{i}-1:**")
+                            st.write(qa_pair['followup_answer'])
             
             # 最終ステップ
             progress_bar.progress(100)
@@ -1166,9 +1257,14 @@ class QAApp:
 
                         # セッションにも追加
                         for qa_pair in result:
-                            SessionManager.add_qa_pair(qa_pair['question'], qa_pair['answer'])
-                            if qa_pair.get('followup_question'):
-                                SessionManager.add_qa_pair(qa_pair['followup_question'], qa_pair['followup_answer'])
+                            # メイン質問とフォローアップをセットで追加
+                            qa_data = {
+                                'question': qa_pair['question'],
+                                'answer': qa_pair['answer'],
+                                'followup_question': qa_pair.get('followup_question', ''),
+                                'followup_answer': qa_pair.get('followup_answer', '')
+                            }
+                            SessionManager.add_qa_pair_with_followup(qa_data)
                         
                         # 累積結果を表示（全てのQ&Aペアを再表示）
                         with result_placeholder.container():
@@ -1234,21 +1330,39 @@ class QAApp:
     
     def _configure_agent_models(self, processing_settings: Dict[str, Any]):
         """各エージェントのモデルとプロンプトバージョンを個別設定"""
-        # 学生エージェントの設定
-        self.student_agent.set_model(processing_settings['student_model'])
-        self.student_agent.update_prompt_version(processing_settings.get('student_version', 'v1_0_0'))
-        
-        # 教師エージェントの設定
-        self.teacher_agent.set_model(processing_settings['teacher_model'])
-        self.teacher_agent.update_prompt_version(processing_settings.get('teacher_version', 'v1_0_0'))
-        
-        # 初期要約エージェントの設定
-        self.initial_summarizer_agent.set_model(processing_settings['summarizer_model'])
-        self.initial_summarizer_agent.update_prompt_version(processing_settings.get('initial_summarizer_version', 'v1_0_0'))
-        
-        # 最終レポート要約エージェントの設定
-        self.summarizer_agent.set_model(processing_settings['summarizer_model'])
-        self.summarizer_agent.update_prompt_version(processing_settings.get('summarizer_version', 'v1_0_0'))
+        try:
+            # 学生エージェントの設定
+            if self.student_agent:
+                self.student_agent.set_model(processing_settings['student_model'])
+                self.student_agent.update_prompt_version(processing_settings.get('student_version', 'v1_0_0'))
+            else:
+                st.warning("モデル設定警告: 学生エージェントが初期化されていません")
+
+            # 教師エージェントの設定
+            if self.teacher_agent:
+                self.teacher_agent.set_model(processing_settings['teacher_model'])
+                self.teacher_agent.update_prompt_version(processing_settings.get('teacher_version', 'v1_0_0'))
+            else:
+                st.warning("モデル設定警告: 教師エージェントが初期化されていません")
+
+            # 初期要約エージェントの設定
+            if self.initial_summarizer_agent:
+                self.initial_summarizer_agent.set_model(processing_settings['summarizer_model'])
+                self.initial_summarizer_agent.update_prompt_version(processing_settings.get('initial_summarizer_version', 'v1_0_0'))
+            else:
+                st.warning("モデル設定警告: 初期要約エージェントが初期化されていません")
+
+            # 最終レポート要約エージェントの設定
+            if self.summarizer_agent:
+                self.summarizer_agent.set_model(processing_settings['summarizer_model'])
+                self.summarizer_agent.update_prompt_version(processing_settings.get('summarizer_version', 'v1_0_0'))
+            else:
+                st.warning("モデル設定警告: 要約エージェントが初期化されていません")
+
+        except Exception as e:
+            st.error(f"モデル設定エラー: {str(e)}")
+            # エージェント再初期化を試行
+            self._initialize_agents_lazy(processing_settings.get('question_level', 'simple'))
     
     async def _run_parallel_qa_session(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
         """並列処理を活用したQ&Aセッション実行"""
@@ -1324,8 +1438,22 @@ class QAApp:
     
     async def _process_section_async(self, section: str, section_index: int, previous_qa: list,
                                    enable_followup: bool, followup_threshold: float, max_followups: int,
-                                   target_keyword: str = None) -> list:
-        """セクション処理の非同期版"""
+                                   target_keyword: str = None, semaphore: asyncio.Semaphore = None) -> list:
+        """セクション処理の非同期版（セマフォ制御付き）"""
+        if semaphore:
+            async with semaphore:
+                return await self._process_section_internal(section, section_index, previous_qa,
+                                                          enable_followup, followup_threshold, max_followups,
+                                                          target_keyword)
+        else:
+            return await self._process_section_internal(section, section_index, previous_qa,
+                                                      enable_followup, followup_threshold, max_followups,
+                                                      target_keyword)
+
+    async def _process_section_internal(self, section: str, section_index: int, previous_qa: list,
+                                      enable_followup: bool, followup_threshold: float, max_followups: int,
+                                      target_keyword: str = None) -> list:
+        """セクション処理の内部実装"""
         section_qa_pairs = []
         
         try:
@@ -1368,18 +1496,23 @@ class QAApp:
     
     async def _generate_question_async(self, section: str, previous_qa: list, target_keyword: str = None) -> str:
         """質問を非同期生成"""
+        if not self.student_agent:
+            raise Exception("学生エージェントが初期化されていません")
+        if not self.teacher_agent:
+            raise Exception("教師エージェントが初期化されていません")
+
         context = {
             "current_section_content": section,
             "document_content": self.teacher_agent.document_content,
             "previous_qa": previous_qa
         }
-        
+
         # 単語指定がある場合はコンテキストに追加
         if target_keyword:
             context["target_keyword"] = target_keyword
-        
+
         question_prompt = self.student_agent.process_message("", context)
-        
+
         return await self.orchestrator.single_agent_invoke(
             self.student_agent.get_agent(),
             question_prompt
@@ -1387,12 +1520,15 @@ class QAApp:
     
     async def _generate_answer_async(self, question: str, section: str, previous_qa: list) -> str:
         """回答を非同期生成"""
+        if not self.teacher_agent:
+            raise Exception("教師エージェントが初期化されていません")
+
         answer_prompt = self.teacher_agent.process_message(question, {
             "current_section_content": section,
             "document_content": self.teacher_agent.document_content,
             "previous_qa": previous_qa
         })
-        
+
         return await self.orchestrator.single_agent_invoke(
             self.teacher_agent.get_agent(),
             answer_prompt
@@ -1492,7 +1628,16 @@ class QAApp:
             question_level = processing_settings.get('question_level', 'beginner')
 
             # 学生エージェントの質問レベルを設定
-            self.student_agent.set_question_level(question_level)
+            if self.student_agent:
+                self.student_agent.set_question_level(question_level)
+            else:
+                st.error("Q&A並列処理エラー: 学生エージェントが初期化されていません")
+                # エージェント再初期化を試行
+                self._initialize_agents_lazy(question_level)
+                if self.student_agent:
+                    self.student_agent.set_question_level(question_level)
+                else:
+                    raise Exception("学生エージェントの初期化に失敗しました")
 
             # 使用済み単語を追跡
             used_keywords = set()
@@ -1555,6 +1700,9 @@ class QAApp:
             completed_count = 0
             total_sections = len(sections)
 
+            # 同時接続数を制限するセマフォ（OpenAI API制限に配慮）
+            semaphore = asyncio.Semaphore(3)  # 最大3並列
+
             # 全セクションのタスクを一度に作成
             all_tasks = []
             section_info = []
@@ -1570,7 +1718,7 @@ class QAApp:
 
                 task = self._process_section_async(section, section_index, [],
                                                  enable_followup, followup_threshold, max_followups,
-                                                 target_keyword)
+                                                 target_keyword, semaphore)
                 all_tasks.append(task)
                 section_info.append({"section_index": section_index, "target_keyword": target_keyword})
 
@@ -1591,81 +1739,29 @@ class QAApp:
 
                         # セッションにも追加
                         for qa_pair in result:
-                            SessionManager.add_qa_pair(qa_pair['question'], qa_pair['answer'])
-                            if qa_pair.get('followup_question'):
-                                SessionManager.add_qa_pair(qa_pair['followup_question'], qa_pair['followup_answer'])
+                            # メイン質問とフォローアップをセットで追加
+                            qa_data = {
+                                'question': qa_pair['question'],
+                                'answer': qa_pair['answer'],
+                                'followup_question': qa_pair.get('followup_question', ''),
+                                'followup_answer': qa_pair.get('followup_answer', '')
+                            }
+                            SessionManager.add_qa_pair_with_followup(qa_data)
 
-                        # 累積結果を表示
-                        with result_placeholder.container():
-                            # 完了したQ&Aを表示
-                            for j, qa_pair in enumerate(qa_pairs):
-                                qa_num = j + 1
-                                with st.expander(f"✅ Q&A {qa_num}: {qa_pair['question'][:50]}...", expanded=False):
-                                    st.markdown(f"**❓ Q{qa_num} (メイン質問):**")
-                                    st.write(f"{qa_pair['question']}")
+                        # バッチ更新（5セクションごとまたは最終セクション）
+                        if completed_count % 5 == 0 or completed_count == total_sections:
+                            with result_placeholder.container():
+                                st.info(f"✅ {len(qa_pairs)}個のQ&Aが完了しました （{completed_count}/{total_sections} セクション処理済み）")
 
-                                    st.markdown(f"**💡 A{qa_num}:**")
-                                    st.write(f"{qa_pair['answer']}")
+                                # 処理中の場合のみシンプルな表示
+                                if completed_count < total_sections:
+                                    st.markdown("🔄 引き続きQ&Aを生成中...")
 
-                                    # フォローアップ質問を関連性を明確にして表示
-                                    if qa_pair.get('followup_question'):
-                                        st.markdown(f"**🔄 Q{qa_num}-1 (フォローアップ):**")
-                                        st.markdown(f"→ {qa_pair['followup_question']}")
-
-                                        st.markdown(f"**💡 A{qa_num}-1:**")
-                                        st.markdown(f"→ {qa_pair['followup_answer']}")
-
-                                    # キャプション情報
-                                    caption_parts = []
-                                    section = qa_pair.get('section', 'N/A')
-                                    if section != 'N/A':
-                                        caption_parts.append(f"セクション: {section}")
-
-                                    complexity_score = qa_pair.get('complexity_score', 'N/A')
-                                    if complexity_score != 'N/A':
-                                        caption_parts.append(f"専門性: {complexity_score}")
-
-                                    if caption_parts:
-                                        st.caption(" | ".join(caption_parts))
-
-                            # 処理中のQ&Aセクションを表示
-                            if completed_count < total_sections:
-                                next_qa_num = len(qa_pairs) + 1
-                                with st.expander(f"🔄 Q&A {next_qa_num}: 生成中...", expanded=True):
-                                    st.markdown("""
-                                    <div style="
-                                        display: flex;
-                                        align-items: center;
-                                        padding: 20px;
-                                        background: linear-gradient(90deg, #fff8e1 0%, #ffffff 100%);
-                                        border-radius: 8px;
-                                        border-left: 4px solid #ffa726;
-                                    ">
-                                        <div style="
-                                            width: 24px;
-                                            height: 24px;
-                                            border: 3px solid #fff3e0;
-                                            border-top: 3px solid #ffa726;
-                                            border-radius: 50%;
-                                            animation: spin 1s linear infinite;
-                                            margin-right: 15px;
-                                        "></div>
-                                        <div>
-                                            <p style="
-                                                color: #f57c00;
-                                                font-weight: 500;
-                                                margin: 0;
-                                                font-size: 14px;
-                                            ">🤖 AIが質問と回答を生成中...</p>
-                                        </div>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                    # 全体進捗を更新
-                    progress_percent = start_percent + (end_percent - start_percent) * (completed_count / total_sections)
-                    overall_progress.progress(int(progress_percent))
-                    overall_status.text(f"💬 Q&A完了: {completed_count}/{total_sections} セクション")
-                    step_info.text(f"ステップ 3/4: Q&A生成 ({completed_count}/{total_sections})")
+                            # 全体進捗を更新
+                            progress_percent = start_percent + (end_percent - start_percent) * (completed_count / total_sections)
+                            overall_progress.progress(int(progress_percent))
+                            overall_status.text(f"💬 Q&A完了: {completed_count}/{total_sections} セクション")
+                            step_info.text(f"ステップ 3/4: Q&A生成 ({completed_count}/{total_sections})")
 
             except Exception as e:
                 st.error(f"並列処理エラー: {str(e)}")
@@ -1684,7 +1780,7 @@ def main():
     try:
         app = QAApp()
         app.run()
-    except Exception as e:
+    except Exception:
         st.error("アプリケーションの起動に失敗しました")
         st.code(traceback.format_exc())
 

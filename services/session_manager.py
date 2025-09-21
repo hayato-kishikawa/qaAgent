@@ -112,14 +112,29 @@ class SessionManager:
         """Q&Aペアを追加"""
         if 'qa_pairs' not in st.session_state:
             st.session_state.qa_pairs = []
-        
+
         qa_pair = {
             'timestamp': datetime.now().isoformat(),
             'question': question,
             'answer': answer
         }
         st.session_state.qa_pairs.append(qa_pair)
-    
+
+    @staticmethod
+    def add_qa_pair_with_followup(qa_data: Dict[str, str]):
+        """フォローアップ質問を含むQ&Aペアを追加"""
+        if 'qa_pairs' not in st.session_state:
+            st.session_state.qa_pairs = []
+
+        qa_pair = {
+            'timestamp': datetime.now().isoformat(),
+            'question': qa_data['question'],
+            'answer': qa_data['answer'],
+            'followup_question': qa_data.get('followup_question', ''),
+            'followup_answer': qa_data.get('followup_answer', '')
+        }
+        st.session_state.qa_pairs.append(qa_pair)
+
     @staticmethod
     def get_qa_pairs() -> list:
         """Q&Aペアを取得"""
