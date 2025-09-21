@@ -204,6 +204,9 @@ class QAApp:
     def _show_prompt_preview_dialog(self):
         """プロンプトプレビューをダイアログで表示"""
         try:
+            from prompts.prompt_loader import PromptLoader
+            prompt_loader = PromptLoader()
+
             # エージェント選択
             agent_options = [
                 ("🎓 学生エージェント", "student"),
@@ -212,31 +215,89 @@ class QAApp:
                 ("📝 初期要約エージェント", "initial_summarizer")
             ]
 
-            # エージェント選択UI
-            selected_agent_name = st.selectbox(
-                "確認するエージェントを選択してください",
-                options=[name for name, _ in agent_options],
-                index=0
-            )
+            col1, col2 = st.columns(2)
 
-            # 選択されたエージェントタイプを取得
-            selected_agent_type = next(agent_type for name, agent_type in agent_options
-                                     if name == selected_agent_name)
+            with col1:
+                # エージェント選択UI
+                selected_agent_name = st.selectbox(
+                    "エージェントを選択",
+                    options=[name for name, _ in agent_options],
+                    index=0
+                )
 
-            # プロンプト表示（常に最新バージョンを使用）
-            selected_version = "latest"
-            with st.expander(f"{selected_agent_name} のプロンプト", expanded=True):
-                system_prompt = self._generate_system_prompt(selected_agent_type, selected_version)
+            with col2:
+                # レベル選択UI（学生エージェントの場合のみ）
+                selected_agent_type = next(agent_type for name, agent_type in agent_options
+                                         if name == selected_agent_name)
 
-                if system_prompt.startswith("プロンプト生成エラー"):
-                    st.error(system_prompt)
+                if selected_agent_type == "student":
+                    level_options = ["Standard", "Simple", "Beginner"]
+                    selected_level = st.selectbox(
+                        "質問レベルを選択",
+                        options=level_options,
+                        index=0
+                    )
                 else:
-                    # プロンプトをコードブロックで表示
-                    st.code(system_prompt, language="markdown")
+                    selected_level = "Standard"
+                    st.selectbox(
+                        "質問レベル",
+                        options=["Standard"],
+                        index=0,
+                        disabled=True
+                    )
 
-                    # 文字数情報
-                    char_count = len(system_prompt)
-                    st.caption(f"文字数: {char_count:,}文字")
+            # システムプロンプト表示
+            with st.expander(f"🤖 {selected_agent_name} - システムプロンプト", expanded=True):
+                try:
+                    system_prompt = prompt_loader.get_system_prompt(selected_agent_type, selected_level)
+                    st.code(system_prompt, language="markdown")
+                    st.caption(f"文字数: {len(system_prompt):,}文字")
+                except Exception as e:
+                    st.error(f"システムプロンプト読み込みエラー: {str(e)}")
+
+            # ユーザープロンプト表示（学生エージェントの場合のみ）
+            if selected_agent_type == "student":
+                with st.expander(f"👤 {selected_agent_name} - ユーザープロンプト", expanded=False):
+                    try:
+                        # サンプルコンテキストでユーザープロンプトを表示
+                        sample_context = {
+                            "previous_questions": "1. サンプル質問1\n2. サンプル質問2"
+                        }
+                        user_prompt = prompt_loader.get_user_prompt(selected_agent_type, selected_level, sample_context)
+                        if user_prompt:
+                            st.code(user_prompt, language="markdown")
+                            st.caption(f"文字数: {len(user_prompt):,}文字")
+                            st.info("💡 {previous_questions}は動的に過去の質問で置換されます")
+                        else:
+                            st.info("このエージェントにはユーザープロンプトがありません")
+                    except Exception as e:
+                        st.error(f"ユーザープロンプト読み込みエラー: {str(e)}")
+
+            # フォローアッププロンプト表示
+            with st.expander(f"🔄 フォローアッププロンプト", expanded=False):
+                try:
+                    prompt_config = prompt_loader.load_prompt(selected_agent_type, selected_level)
+                    followup_section = prompt_config.get('followup_question_prompt', {})
+
+                    if followup_section:
+                        # フォローアップセクションを構造化して表示
+                        followup_parts = []
+                        for key, value in followup_section.items():
+                            if key.startswith('prompt'):
+                                followup_parts.append(value)
+                            else:
+                                followup_parts.append(value)
+
+                        followup_text = "\n".join(followup_parts)
+                        # サンプルコンテキストを適用
+                        sample_followup = followup_text.replace("{current_answer}", "サンプル回答内容")
+                        st.code(sample_followup, language="markdown")
+                        st.caption(f"文字数: {len(sample_followup):,}文字")
+                        st.info("💡 {current_answer}は動的に先生の回答で置換されます")
+                    else:
+                        st.info("このエージェントにはフォローアッププロンプトがありません")
+                except Exception as e:
+                    st.error(f"フォローアッププロンプト読み込みエラー: {str(e)}")
 
             # 閉じるボタン
             if st.button("閉じる", use_container_width=True):
@@ -245,98 +306,14 @@ class QAApp:
         except Exception as e:
             st.error(f"プロンプトプレビューエラー: {str(e)}")
 
-    def _render_prompt_preview_tab(self):
-        """プロンプトプレビュータブを描画 - 削除済み"""
-        # この機能はポップアップに移行されました
-        pass
 
-    def _render_prompt_preview(self):
-        """現在適用されているプロンプトをプレビュー表示"""
-        st.subheader(" 現在適用中のプロンプト")
-        st.markdown("各エージェントが実際にモデルに送信するプロンプトテキストを確認できます。")
-
-        from prompts.prompt_loader import PromptLoader
-        prompt_loader = PromptLoader()
-
-        # エージェント選択
-        agent_types = {
-            "🎓 学生エージェント": "student",
-            "👨‍🏫 教師エージェント": "teacher",
-            "📋 要約エージェント": "summarizer",
-            "📄 初期要約エージェント": "initial_summarizer"
-        }
-
-        selected_agent = st.selectbox(
-            "エージェントを選択",
-            list(agent_types.keys()),
-            key="prompt_preview_agent_select"
-        )
-
-        agent_type = agent_types[selected_agent]
-        version = "latest"  # 常にlatestを使用
-
-        try:
-            # 実際のエージェントのシステムプロンプトを生成
-            system_prompt = self._generate_system_prompt(agent_type, version)
-
-            st.subheader(f"{selected_agent} - 実際のプロンプトテキスト")
-
-            # システムプロンプト表示
-            with st.expander("🤖 システムプロンプト（モデルに送信される内容）", expanded=True):
-                st.markdown("**このテキストがモデルのシステムメッセージとして送信されます:**")
-                st.code(system_prompt, language="text")
-
-                # 文字数情報
-                char_count = len(system_prompt)
-                st.caption(f"文字数: {char_count:,}文字")
-
-
-        except Exception as e:
-            st.error(f"プロンプト読み込みエラー: {str(e)}")
-
-    def _generate_system_prompt(self, agent_type: str, version: str) -> str:
+    def _generate_system_prompt(self, agent_type: str, level: str = "Standard") -> str:
         """エージェントの実際のシステムプロンプトを生成"""
         from prompts.prompt_loader import PromptLoader
         prompt_loader = PromptLoader()
 
         try:
-            prompt_config = prompt_loader.load_prompt(agent_type, version)
-
-            # プロンプトを構築
-            prompt_parts = []
-
-            # Identity セクション
-            if 'identity' in prompt_config:
-                prompt_parts.append("# Identity")
-                for key, value in prompt_config['identity'].items():
-                    prompt_parts.append(f"- {value}")
-                prompt_parts.append("")
-
-            # Instructions セクション
-            if 'instructions' in prompt_config:
-                prompt_parts.append("# Instructions")
-                for key, value in prompt_config['instructions'].items():
-                    prompt_parts.append(f"- {value}")
-                prompt_parts.append("")
-
-            # Format セクション
-            if 'format' in prompt_config:
-                prompt_parts.append("# Output Format")
-                for key, value in prompt_config['format'].items():
-                    prompt_parts.append(f"- {value}")
-                prompt_parts.append("")
-
-            # Examples セクション
-            if 'examples' in prompt_config:
-                prompt_parts.append("# Examples")
-                for key, value in prompt_config['examples'].items():
-                    # example_1 -> example1 の形式に変換
-                    example_num = key.replace('example_', 'example')
-                    prompt_parts.append(f'## {example_num}: "{value}"')
-                prompt_parts.append("")
-
-            return "\n".join(prompt_parts).strip()
-
+            return prompt_loader.get_system_prompt(agent_type, level)
         except Exception as e:
             return f"プロンプト生成エラー: {str(e)}"
 
@@ -375,10 +352,10 @@ class QAApp:
                 'followup_threshold': upload_result['followup_threshold'],
                 'max_followups': upload_result['max_followups'],
                 'target_keywords': upload_result.get('target_keywords', []),
-                'student_version': 'latest',
-                'teacher_version': 'latest',
-                'summarizer_version': 'latest',
-                'initial_summarizer_version': 'latest',
+                'student_level': 'Standard',
+                'teacher_level': 'Standard',
+                'summarizer_level': 'Standard',
+                'initial_summarizer_level': 'Standard',
                 'quick_mode': upload_result.get('quick_mode', False),
                 'input_type': upload_result['input_type']
             }
@@ -829,184 +806,7 @@ class QAApp:
             # エラー時はデフォルト値を返す
             return 0.5
     
-    def _run_streaming_qa_session(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> list:
-        """ストリーミング形式でQ&Aセッションを実行（フォローアップ質問機能付き）"""
-        qa_pairs = []
-        
-        # 設定を取得
-        qa_turns = processing_settings['qa_turns']
-        enable_followup = processing_settings['enable_followup']
-        followup_threshold = processing_settings['followup_threshold']
-        max_followups = processing_settings['max_followups']
-        
-        # 文書をセクションに分割
-        sections = self._split_document(pdf_data['text_content'], qa_turns)
-        self.student_agent.set_document_sections(sections)
-        self.teacher_agent.set_document_content(pdf_data['text_content'])
-        
-        # プログレスバーを作成
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        for i, section in enumerate(sections):
-            try:
-                # 進捗更新（メインQ&Aのみ）
-                main_progress = (i + 1) / len(sections)
-                progress_bar.progress(main_progress)
-                status_text.text(f"メインQ&A {i+1}/{len(sections)} を生成中...")
-                
-                # Q&Aペア表示用のコンテナ
-                qa_container = st.container()
-                
-                with qa_container:
-                    # メイン質問生成
-                    with st.spinner(f"❓ 質問 {i+1} を生成中..."):
-                        question_prompt = self.student_agent.process_message("", {
-                            "current_section_content": section,
-                            "document_content": self.teacher_agent.document_content,
-                            "previous_qa": qa_pairs
-                        })
-                        
-                        question = asyncio.run(self.orchestrator.single_agent_invoke(
-                            self.student_agent.get_agent(),
-                            question_prompt
-                        ))
-                    
-                    # メイン質問表示
-                    st.markdown(f"**❓ Q{i+1}:** {question}")
-                    
-                    # メイン回答生成
-                    with st.spinner(f"💡 回答 {i+1} を生成中..."):
-                        answer_prompt = self.teacher_agent.process_message(question, {
-                            "current_section_content": section,
-                            "document_content": self.teacher_agent.document_content,
-                            "previous_qa": qa_pairs
-                        })
-                        
-                        answer = asyncio.run(self.orchestrator.single_agent_invoke(
-                            self.teacher_agent.get_agent(),
-                            answer_prompt
-                        ))
-                    
-                    # メイン回答表示
-                    st.markdown(f"**💡 A{i+1}:** {answer}")
-                    
-                    # メインQ&Aペアを保存
-                    main_qa_pair = {
-                        "question": question,
-                        "answer": answer,
-                        "section": i,
-                        "type": "main"
-                    }
-                    qa_pairs.append(main_qa_pair)
-                    SessionManager.add_qa_pair(question, answer)
-                    
-                    # フォローアップ質問の実行（設定が有効な場合のみ）
-                    followup_pairs = []
-                    if enable_followup:
-                        complexity_score = asyncio.run(self._evaluate_answer_complexity(answer))
-                        if complexity_score >= followup_threshold:
-                            status_text.text(f"フォローアップ質問を生成中 (セクション {i+1})...")
-                            followup_pairs = self._handle_followup_questions(
-                                section, answer, i, qa_pairs, followup_threshold, max_followups
-                            )
-                    
-                    # フォローアップQ&Aを表示・保存
-                    for j, followup_pair in enumerate(followup_pairs, 1):
-                        st.markdown(f"**❓ Q{i+1}-{j} (フォローアップ):** {followup_pair['question']}")
-                        st.markdown(f"**💡 A{i+1}-{j}:** {followup_pair['answer']}")
-                        qa_pairs.append(followup_pair)
-                        SessionManager.add_qa_pair(followup_pair['question'], followup_pair['answer'])
-                    
-                    st.divider()
-                
-            except Exception as e:
-                st.error(f"Q&A生成エラー (セクション{i+1}): {str(e)}")
-        
-        # 完了
-        progress_bar.progress(1.0)
-        status_text.text("Q&Aセッション完了！")
-        
-        return qa_pairs
     
-    def _handle_followup_questions(self, section: str, initial_answer: str, section_index: int, qa_pairs: list, threshold: float = 0.6, max_followups: int = 3) -> list:
-        """フォローアップ質問を処理"""
-        followup_pairs = []
-        complexity_threshold = threshold
-        
-        # 初回回答の専門度を評価
-        complexity_score = asyncio.run(self._evaluate_answer_complexity(initial_answer))
-        
-        if complexity_score < complexity_threshold:
-            return followup_pairs  # 専門度が低い場合はフォローアップなし
-        
-        current_answer = initial_answer
-        
-        for followup_count in range(max_followups):
-            try:
-                # フォローアップ質問生成
-                followup_question_prompt = f"""
-あなたは好奇心旺盛な学習者です。先生の回答が専門的で理解が難しいため、より簡単に説明してもらいたいと思っています。
-
-先生の回答: {current_answer}
-
-以下の観点でフォローアップ質問を1つ生成してください：
-- 専門用語の意味を問う
-- 具体例を求める
-- より簡単な説明を求める
-- 関連する基本概念の説明を求める
-
-質問は自然で学習者らしい表現にしてください。
-"""
-                
-                followup_question = asyncio.run(self.orchestrator.single_agent_invoke(
-                    self.student_agent.get_agent(),
-                    followup_question_prompt
-                ))
-                
-                # フォローアップ回答生成
-                followup_answer_prompt = f"""
-学習者からフォローアップ質問を受けました。より理解しやすく、親しみやすい説明をしてください。
-
-質問: {followup_question}
-文書セクション: {section}
-
-以下を心がけて回答してください：
-- 専門用語は平易な言葉で説明
-- 具体例や比喩を使用
-- 段階的で理解しやすい構成
-- 学習者の知識レベルに合わせた説明
-"""
-                
-                followup_answer = asyncio.run(self.orchestrator.single_agent_invoke(
-                    self.teacher_agent.get_agent(),
-                    followup_answer_prompt
-                ))
-                
-                # フォローアップペアを保存
-                followup_pair = {
-                    "question": followup_question,
-                    "answer": followup_answer,
-                    "section": section_index,
-                    "type": "followup",
-                    "followup_count": followup_count + 1
-                }
-                followup_pairs.append(followup_pair)
-                
-                # 新しい回答の専門度を評価
-                new_complexity = asyncio.run(self._evaluate_answer_complexity(followup_answer))
-                
-                # 理解しやすくなった場合は終了
-                if new_complexity < complexity_threshold:
-                    break
-                
-                current_answer = followup_answer
-                
-            except Exception as e:
-                st.warning(f"フォローアップ質問 {followup_count + 1} の生成に失敗: {str(e)}")
-                break
-        
-        return followup_pairs
     
     async def _run_parallel_summary_and_qa(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any]) -> tuple:
         """要約とQ&Aセッションを並列実行し、要約は完了次第すぐに表示"""
@@ -1241,7 +1041,7 @@ class QAApp:
                 section_info.append({"section_index": section_index, "target_keyword": target_keyword})
             
             # 順序を保持して処理（asyncio.gatherを使用）
-            status_text.text(f"全{total_sections}セクションを順序付き並列処理中...")
+            status_text.text(f"全{total_sections}セクションを並列処理中...")
 
             try:
                 # 順序を保持しながら並列実行
@@ -1334,28 +1134,28 @@ class QAApp:
             # 学生エージェントの設定
             if self.student_agent:
                 self.student_agent.set_model(processing_settings['student_model'])
-                self.student_agent.update_prompt_version(processing_settings.get('student_version', 'v1_0_0'))
+                # プロンプトレベル設定は新しいシステムで動的に処理されるため、ここでは不要
             else:
                 st.warning("モデル設定警告: 学生エージェントが初期化されていません")
 
             # 教師エージェントの設定
             if self.teacher_agent:
                 self.teacher_agent.set_model(processing_settings['teacher_model'])
-                self.teacher_agent.update_prompt_version(processing_settings.get('teacher_version', 'v1_0_0'))
+                # プロンプトレベル設定は新しいシステムで動的に処理されるため、ここでは不要
             else:
                 st.warning("モデル設定警告: 教師エージェントが初期化されていません")
 
             # 初期要約エージェントの設定
             if self.initial_summarizer_agent:
                 self.initial_summarizer_agent.set_model(processing_settings['summarizer_model'])
-                self.initial_summarizer_agent.update_prompt_version(processing_settings.get('initial_summarizer_version', 'v1_0_0'))
+                # プロンプトレベル設定は新しいシステムで動的に処理されるため、ここでは不要
             else:
                 st.warning("モデル設定警告: 初期要約エージェントが初期化されていません")
 
             # 最終レポート要約エージェントの設定
             if self.summarizer_agent:
                 self.summarizer_agent.set_model(processing_settings['summarizer_model'])
-                self.summarizer_agent.update_prompt_version(processing_settings.get('summarizer_version', 'v1_0_0'))
+                # プロンプトレベル設定は新しいシステムで動的に処理されるため、ここでは不要
             else:
                 st.warning("モデル設定警告: 要約エージェントが初期化されていません")
 
@@ -1493,7 +1293,23 @@ class QAApp:
             st.error(f"セクション{section_index+1}の処理エラー: {str(e)}")
         
         return section_qa_pairs
-    
+
+    def _format_previous_questions(self, previous_qa: list) -> str:
+        """過去の質問を適切にフォーマット（全て）"""
+        if not previous_qa:
+            return "まだ質問はありません。"
+
+        formatted_questions = []
+        for i, qa_pair in enumerate(previous_qa, 1):
+            question = qa_pair.get('question', '')
+            if question:
+                # 質問を50文字以内に要約
+                if len(question) > 50:
+                    question = question[:47] + "..."
+                formatted_questions.append(f"{i}. {question}")
+
+        return "\n".join(formatted_questions) if formatted_questions else "まだ質問はありません。"
+
     async def _generate_question_async(self, section: str, previous_qa: list, target_keyword: str = None) -> str:
         """質問を非同期生成"""
         if not self.student_agent:
@@ -1501,21 +1317,36 @@ class QAApp:
         if not self.teacher_agent:
             raise Exception("教師エージェントが初期化されていません")
 
+        # 過去の質問をフォーマット
+        previous_questions_text = self._format_previous_questions(previous_qa)
+
+        # prompt_loaderを使用して動的にユーザープロンプトを生成
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
+
+        # 学生エージェントのレベル設定を取得（デフォルトはStandard）
+        question_level = getattr(self.student_agent, 'question_level', 'standard')
+
+
+        # ユーザープロンプトにコンテキストを埋め込み
         context = {
+            "previous_questions": previous_questions_text,
             "current_section_content": section,
-            "document_content": self.teacher_agent.document_content,
-            "previous_qa": previous_qa
+            "document_content": self.teacher_agent.document_content
         }
 
         # 単語指定がある場合はコンテキストに追加
         if target_keyword:
             context["target_keyword"] = target_keyword
 
-        question_prompt = self.student_agent.process_message("", context)
+        user_prompt = prompt_loader.get_user_prompt("student", question_level, context)
+
+        # 文書セクションを追加
+        full_user_prompt = f"{user_prompt}\n\n文書セクション:\n{section}"
 
         return await self.orchestrator.single_agent_invoke(
             self.student_agent.get_agent(),
-            question_prompt
+            full_user_prompt
         )
     
     async def _generate_answer_async(self, question: str, section: str, previous_qa: list) -> str:
@@ -1573,22 +1404,27 @@ class QAApp:
     
     async def _generate_followup_question_async(self, current_answer: str) -> str:
         """フォローアップ質問を非同期生成"""
-        followup_question_prompt = f"""
-あなたは文書をしっかり理解したい学習者です。先生の回答を読んで、その内容についてより深く理解したいと思っています。
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
 
-先生の回答: {current_answer}
+        # followup_question_promptセクションを取得
+        prompt_config = prompt_loader.load_prompt("student", "Standard")
+        followup_prompt_section = prompt_config.get('followup_question_prompt', {})
 
-以下の観点で、回答内容をより深く理解するためのフォローアップ質問を1つ生成してください：
-- 回答で説明された仕組みや原理の詳細
-- 言及された具体例や事例の詳細
-- 影響や結果についてのより具体的な説明
-- 比較や違いについてのより詳しい説明
-- 実際の応用や活用場面の詳細
+        if not followup_prompt_section:
+            raise ValueError("followup_question_promptセクションが見つかりません")
 
-重要：必ず先生の回答内容に言及されていることについて質問し、全く新しい話題は避けてください。
-質問は「つまり」「要するに」「簡単に言うと」といった表現を使って、親しみやすく質問してください。
-"""
-        
+        # followup_question_promptセクションを構造化して構築
+        followup_prompt_parts = []
+        for key, value in followup_prompt_section.items():
+            if key.startswith('prompt'):
+                followup_prompt_parts.append(value)
+            else:
+                followup_prompt_parts.append(value)
+
+        followup_prompt_template = "\n".join(followup_prompt_parts)
+        followup_question_prompt = followup_prompt_template.replace("{current_answer}", current_answer)
+
         return await self.orchestrator.single_agent_invoke(
             self.student_agent.get_agent(),
             followup_question_prompt
@@ -1596,20 +1432,27 @@ class QAApp:
     
     async def _generate_followup_answer_async(self, followup_question: str, section: str) -> str:
         """フォローアップ回答を非同期生成"""
-        followup_answer_prompt = f"""
-学習者からフォローアップ質問を受けました。文書内容に基づいて、より詳細で分かりやすい説明をしてください。
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
 
-質問: {followup_question}
-文書セクション: {section}
+        # teacherのfollowup_answer_promptセクションを取得
+        prompt_config = prompt_loader.load_prompt("teacher", "standard")
+        followup_answer_section = prompt_config.get('followup_answer_prompt', {})
 
-以下を心がけて回答してください：
-- 必ず文書に書かれている内容のみを根拠として回答する
-- 「文書によると」「文書では」といった表現で文書根拠を明確にする
-- 文書の該当部分をより詳しく説明し、理解を深める
-- 文書にない内容は推測せず、文書の範囲内で回答する
-- 「つまり」「簡単に言うと」といった表現で分かりやすく説明する
-"""
-        
+        if not followup_answer_section:
+            raise ValueError("followup_answer_promptセクションが見つかりません")
+
+        # followup_answer_promptセクションを構造化して構築
+        followup_prompt_parts = []
+        for key, value in followup_answer_section.items():
+            if key.startswith('prompt'):
+                followup_prompt_parts.append(value)
+            else:
+                followup_prompt_parts.append(value)
+
+        followup_prompt_template = "\n".join(followup_prompt_parts)
+        followup_answer_prompt = followup_prompt_template.replace("{followup_question}", followup_question).replace("{section}", section)
+
         return await self.orchestrator.single_agent_invoke(
             self.teacher_agent.get_agent(),
             followup_answer_prompt
@@ -1723,7 +1566,7 @@ class QAApp:
                 section_info.append({"section_index": section_index, "target_keyword": target_keyword})
 
             # 順序を保持して処理
-            overall_status.text(f"💬 全{total_sections}セクションを順序付き並列処理中...")
+            overall_status.text(f"💬 全{total_sections}セクションを並列処理中...")
 
             try:
                 # 順序を保持しながら並列実行

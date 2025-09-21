@@ -6,7 +6,7 @@ from datetime import datetime
 class SummarizerAgent(BaseAgent):
     """要約・整形エージェント - 文書要約と最終レポート生成の役割"""
     
-    def __init__(self, kernel_service: KernelService, prompt_version: str = "latest"):
+    def __init__(self, kernel_service: KernelService, prompt_version: str = "standard"):
         self.summaries_created = 0
         self.reports_created = 0
         super().__init__("summarizer", kernel_service, prompt_version)

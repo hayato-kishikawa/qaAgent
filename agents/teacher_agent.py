@@ -5,7 +5,7 @@ from services.kernel_service import KernelService
 class TeacherAgent(BaseAgent):
     """先生エージェント - 質問に回答する役割"""
     
-    def __init__(self, kernel_service: KernelService, prompt_version: str = "latest"):
+    def __init__(self, kernel_service: KernelService, prompt_version: str = "standard"):
         self.answers_provided = 0
         self.document_content = ""
         self.qa_history = []  # Q&A履歴を保存
@@ -229,11 +229,10 @@ class TeacherAgent(BaseAgent):
             ""
         ]
 
-        # 過去のQ&A履歴を含める（最新5件）
+        # 過去のQ&A履歴を含める（全て）
         if self.qa_history:
             prompt_parts.append("【これまでのQ&A履歴】")
-            recent_history = self.qa_history[-5:]  # 最新5件
-            for qa in recent_history:
+            for qa in self.qa_history:
                 prompt_parts.append(f"Q: {qa['question']}")
                 prompt_parts.append(f"A: {qa['answer'][:200]}...")  # 回答は200文字まで
                 prompt_parts.append("")

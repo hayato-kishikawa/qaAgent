@@ -8,7 +8,7 @@ class InitialSummarizerAgent(BaseAgent):
     """
     
     def __init__(self, kernel_service):
-        super().__init__("initial_summarizer", kernel_service)
+        super().__init__("initial_summarizer", kernel_service, "standard")
         self.document_content = ""
     
     def set_document_content(self, content: str):

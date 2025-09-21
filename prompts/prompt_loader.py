@@ -10,19 +10,19 @@ class PromptLoader:
         self._cache = {}  # プロンプトキャッシュ
         self._file_timestamps = {}  # ファイルタイムスタンプキャッシュ
     
-    def load_prompt(self, agent_type: str, version: str = "v1_0_0") -> Dict[str, Any]:
+    def load_prompt(self, agent_type: str, level: str = "Standard") -> Dict[str, Any]:
         """
-        指定されたエージェントタイプとバージョンのプロンプトを読み込む
+        指定されたエージェントタイプとレベルのプロンプトを読み込む
 
         Args:
             agent_type: エージェントタイプ（student, teacher, summarizer）
-            version: プロンプトバージョン（"v1_0_0", "v2_0_0" など）
+            level: 質問レベル（"Standard", "Simple", "Beginner"）
 
         Returns:
             プロンプト設定の辞書
         """
-        prompt_path = os.path.join(self.prompts_dir, agent_type, f"{version}.ini")
-        cache_key = f"{agent_type}_{version}"
+        prompt_path = os.path.join(self.prompts_dir, agent_type, "prompt.ini")
+        cache_key = f"{agent_type}_{level}"
 
         if not os.path.exists(prompt_path):
             raise FileNotFoundError(f"プロンプトファイルが見つかりません: {prompt_path}")
@@ -48,128 +48,149 @@ class PromptLoader:
             for section in config.sections():
                 prompt_dict[section] = dict(config.items(section))
 
+            # 指定されたレベルのSystem/Userセクションを抽出
+            system_section = f"{level.lower()}-system"
+            user_section = f"{level.lower()}-user"
+
+            result = {
+                'system': prompt_dict.get(system_section, {}),
+                'user': prompt_dict.get(user_section, {}),
+                'followup_question_prompt': prompt_dict.get('followup_question_prompt', {}),
+                'followup_answer_prompt': prompt_dict.get('followup_answer_prompt', {})
+            }
+
             # キャッシュに保存
-            self._cache[cache_key] = prompt_dict
+            self._cache[cache_key] = result
             self._file_timestamps[cache_key] = current_mtime
 
-            return prompt_dict
+            return result
 
         except Exception as e:
             raise RuntimeError(f"プロンプトファイルの読み込みエラー ({prompt_path}): {str(e)}")
     
-    def get_system_prompt(self, agent_type: str, version: str = "v1_0_0") -> str:
+    def get_system_prompt(self, agent_type: str, level: str = "Standard") -> str:
         """
         システムプロンプトを構築して返す
 
         Args:
             agent_type: エージェントタイプ
-            version: プロンプトバージョン
+            level: 質問レベル
 
         Returns:
             システムプロンプト文字列
         """
-        system_cache_key = f"system_{agent_type}_{version}"
+        system_cache_key = f"system_{agent_type}_{level}"
 
         # システムプロンプトのキャッシュを確認
         if system_cache_key in self._cache:
             return self._cache[system_cache_key]
 
-        prompt_config = self.load_prompt(agent_type, version)
+        prompt_config = self.load_prompt(agent_type, level)
 
-        # システムプロンプトを構築
-        system_parts = []
+        # システムプロンプトを構築（新しいSystem/User構造）
+        system_section = prompt_config.get('system', {})
 
-        # identity セクション（新構造）
-        if 'identity' in prompt_config:
-            identity_section = prompt_config['identity']
-            if 'role' in identity_section:
-                system_parts.append(f"【役割】\n{identity_section['role']}")
-            if 'approach' in identity_section:
-                system_parts.append(f"【アプローチ】\n{identity_section['approach']}")
-            if 'personality' in identity_section:
-                system_parts.append(f"【性格】\n{identity_section['personality']}")
-            if 'curiosity' in identity_section:
-                system_parts.append(f"【好奇心】\n{identity_section['curiosity']}")
+        if not system_section:
+            raise ValueError(f"システムプロンプトが見つかりません: {agent_type}, {level}")
 
-        # instructions セクション（新構造）
-        if 'instructions' in prompt_config:
-            system_parts.append("【指示】")
-            for key, value in prompt_config['instructions'].items():
-                system_parts.append(f"- {key}: {value}")
+        # システムセクションを構造化して構築
+        system_prompt_parts = []
 
-        # format セクション（新構造）
-        if 'format' in prompt_config:
-            system_parts.append("【出力形式】")
-            for key, value in prompt_config['format'].items():
-                system_parts.append(f"- {key}: {value}")
+        # セクション別に整理
+        current_section = None
+        for key, value in system_section.items():
+            if key.startswith('identity'):
+                if current_section != 'identity':
+                    if current_section is not None:
+                        system_prompt_parts.append("")  # セクション間の改行
+                    system_prompt_parts.append("# Identity")
+                    current_section = 'identity'
+                system_prompt_parts.append(f"- {value}")
+            elif key.startswith('instruction'):
+                if current_section != 'instruction':
+                    if current_section is not None:
+                        system_prompt_parts.append("")  # セクション間の改行
+                    system_prompt_parts.append("# Instructions")
+                    current_section = 'instruction'
+                system_prompt_parts.append(f"- {value}")
+            elif key.startswith('format'):
+                if current_section != 'format':
+                    if current_section is not None:
+                        system_prompt_parts.append("")  # セクション間の改行
+                    system_prompt_parts.append("# Output Format")
+                    current_section = 'format'
+                system_prompt_parts.append(f"- {value}")
+            elif key.startswith('example'):
+                if current_section != 'example':
+                    if current_section is not None:
+                        system_prompt_parts.append("")  # セクション間の改行
+                    system_prompt_parts.append("# Examples")
+                    current_section = 'example'
+                system_prompt_parts.append(f"- {value}")
 
-        # examples セクション（新構造）
-        if 'examples' in prompt_config:
-            system_parts.append("【質問例】")
-            for key, value in prompt_config['examples'].items():
-                system_parts.append(f"- {value}")
-
-        # 旧構造との互換性を保持
-        # system セクション（旧構造）
-        if 'system' in prompt_config:
-            system_parts.append(f"役割: {prompt_config['system'].get('role', '')}")
-
-        # personality セクション（旧構造、studentの場合）
-        if 'personality' in prompt_config:
-            system_parts.append("性格:")
-            for key, value in prompt_config['personality'].items():
-                system_parts.append(f"- {key}: {value}")
-
-        # expertise セクション（旧構造、teacherの場合）
-        if 'expertise' in prompt_config:
-            system_parts.append("専門性:")
-            for key, value in prompt_config['expertise'].items():
-                system_parts.append(f"- {key}: {value}")
-
-        # responsibilities セクション（旧構造、summarizerの場合）
-        if 'responsibilities' in prompt_config:
-            system_parts.append("責任:")
-            for key, value in prompt_config['responsibilities'].items():
-                system_parts.append(f"- {key}: {value}")
-
-        # output_format セクション（旧構造、summarizerの場合）
-        if 'output_format' in prompt_config:
-            system_parts.append("出力形式:")
-            for key, value in prompt_config['output_format'].items():
-                system_parts.append(f"- {key}: {value}")
-
-        # instruction セクション（旧構造）
-        if 'instruction' in prompt_config:
-            system_parts.append("指示:")
-            for key, value in prompt_config['instruction'].items():
-                system_parts.append(f"- {key}: {value}")
-
-        system_prompt = "\n\n".join(system_parts)
+        system_prompt = "\n".join(system_prompt_parts)
 
         # システムプロンプトをキャッシュに保存
         self._cache[system_cache_key] = system_prompt
 
         return system_prompt
     
-    def get_available_versions(self, agent_type: str) -> list:
+    def get_user_prompt(self, agent_type: str, level: str = "Standard", context: Dict[str, Any] = None) -> str:
         """
-        指定されたエージェントタイプで利用可能なバージョンのリストを取得
-        
+        ユーザープロンプトを構築して返す（過去質問などの動的コンテキスト付き）
+
         Args:
             agent_type: エージェントタイプ
-            
+            level: 質問レベル
+            context: 動的に挿入するコンテキスト情報
+
         Returns:
-            利用可能なバージョンのリスト
+            ユーザープロンプト文字列
         """
-        agent_dir = os.path.join(self.prompts_dir, agent_type)
-        if not os.path.exists(agent_dir):
+        prompt_config = self.load_prompt(agent_type, level)
+        user_section = prompt_config.get('user', {})
+
+        if not user_section:
+            return ""
+
+        # ユーザーセクションのテキストを構築
+        user_prompt_parts = []
+        for key, value in user_section.items():
+            if key.startswith('user'):
+                user_prompt_parts.append(f"- {value}")
+            else:
+                user_prompt_parts.append(value)
+
+        user_prompt = "\n".join(user_prompt_parts)
+
+        # コンテキスト情報で動的に置換
+        if context:
+            for placeholder, replacement in context.items():
+                user_prompt = user_prompt.replace(f"{{{placeholder}}}", str(replacement))
+
+        return user_prompt
+
+    def get_available_levels(self, agent_type: str) -> list:
+        """
+        指定されたエージェントタイプで利用可能なレベルのリストを取得
+
+        Returns:
+            利用可能なレベルのリスト
+        """
+        prompt_path = os.path.join(self.prompts_dir, agent_type, "prompt.ini")
+        if not os.path.exists(prompt_path):
             return []
-        
-        versions = []
-        for file in os.listdir(agent_dir):
-            if file.endswith('.ini'):
-                versions.append(file.replace('.ini', ''))
-        
-        # v1_0_0を最初に来るようにソート
-        versions = sorted(versions, key=lambda x: (x != 'v1_0_0', x))
-        return versions
+
+        try:
+            config = configparser.ConfigParser()
+            config.read(prompt_path, encoding='utf-8')
+
+            levels = []
+            for section in config.sections():
+                if section.endswith('-system'):
+                    level = section.replace('-system', '')
+                    levels.append(level)
+
+            return sorted(levels)
+        except Exception:
+            return []

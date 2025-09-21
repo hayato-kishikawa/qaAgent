@@ -8,7 +8,7 @@ from prompts.prompt_loader import PromptLoader
 class BaseAgent(ABC):
     """エージェントの基底クラス"""
     
-    def __init__(self, agent_type: str, kernel_service: KernelService, prompt_version: str = "latest"):
+    def __init__(self, agent_type: str, kernel_service: KernelService, prompt_version: str = "standard"):
         self.agent_type = agent_type
         self.kernel_service = kernel_service
         self.prompt_version = prompt_version
