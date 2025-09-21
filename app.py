@@ -255,49 +255,6 @@ class QAApp:
                 except Exception as e:
                     st.error(f"システムプロンプト読み込みエラー: {str(e)}")
 
-            # ユーザープロンプト表示（学生エージェントの場合のみ）
-            if selected_agent_type == "student":
-                with st.expander(f"👤 {selected_agent_name} - ユーザープロンプト", expanded=False):
-                    try:
-                        # サンプルコンテキストでユーザープロンプトを表示
-                        sample_context = {
-                            "previous_questions": "1. サンプル質問1\n2. サンプル質問2"
-                        }
-                        user_prompt = prompt_loader.get_user_prompt(selected_agent_type, selected_level, sample_context)
-                        if user_prompt:
-                            st.code(user_prompt, language="markdown")
-                            st.caption(f"文字数: {len(user_prompt):,}文字")
-                            st.info("💡 {previous_questions}は動的に過去の質問で置換されます")
-                        else:
-                            st.info("このエージェントにはユーザープロンプトがありません")
-                    except Exception as e:
-                        st.error(f"ユーザープロンプト読み込みエラー: {str(e)}")
-
-            # フォローアッププロンプト表示
-            with st.expander(f"🔄 フォローアッププロンプト", expanded=False):
-                try:
-                    prompt_config = prompt_loader.load_prompt(selected_agent_type, selected_level)
-                    followup_section = prompt_config.get('followup_question_prompt', {})
-
-                    if followup_section:
-                        # フォローアップセクションを構造化して表示
-                        followup_parts = []
-                        for key, value in followup_section.items():
-                            if key.startswith('prompt'):
-                                followup_parts.append(value)
-                            else:
-                                followup_parts.append(value)
-
-                        followup_text = "\n".join(followup_parts)
-                        # サンプルコンテキストを適用
-                        sample_followup = followup_text.replace("{current_answer}", "サンプル回答内容")
-                        st.code(sample_followup, language="markdown")
-                        st.caption(f"文字数: {len(sample_followup):,}文字")
-                        st.info("💡 {current_answer}は動的に先生の回答で置換されます")
-                    else:
-                        st.info("このエージェントにはフォローアッププロンプトがありません")
-                except Exception as e:
-                    st.error(f"フォローアッププロンプト読み込みエラー: {str(e)}")
 
             # 閉じるボタン
             if st.button("閉じる", use_container_width=True):

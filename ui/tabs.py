@@ -11,7 +11,8 @@ class TabManager:
     
     def render_main_tabs(self, session_data: Dict[str, Any]):
         """メインタブを描画"""
-        tab1, tab2, tab3 = st.tabs(["📚 要約・Q&Aセッション", "📊 最終レポート", "📄 文書ビューアー"])
+        # 文書ビューアータブを無効化（本番環境では非表示）
+        tab1, tab2 = st.tabs(["📚 要約・Q&Aセッション", "📊 最終レポート"])
 
         with tab1:
             self._render_qa_session_tab(session_data)
@@ -19,8 +20,9 @@ class TabManager:
         with tab2:
             self._render_final_report_tab(session_data)
 
-        with tab3:
-            self._render_document_viewer_tab(session_data)
+        # 文書ビューアータブは無効化（コードは保持）
+        # with tab3:
+        #     self._render_document_viewer_tab(session_data)
     
     def _render_qa_session_tab(self, session_data: Dict[str, Any]):
         """要約・Q&Aセッションタブの内容"""
