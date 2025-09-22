@@ -1444,8 +1444,8 @@ class QAApp:
             #                                content_length=len(pdf_data['text_content']),
             #                                target_sections=qa_turns):
             sections = self._split_document(pdf_data['text_content'], qa_turns)
-                self.student_agent.set_document_sections(sections)
-                self.teacher_agent.set_document_content(pdf_data['text_content'])
+            self.student_agent.set_document_sections(sections)
+            self.teacher_agent.set_document_content(pdf_data['text_content'])
 
             # リアルタイム結果表示用のコンテナ
             results_container = st.container()
@@ -1513,40 +1513,40 @@ class QAApp:
                 # with profiler.profile_operation("question_generation_phase",
                 #                                total_sections=len(sections),
                 #                                question_level=question_level):
-                    generated_questions = []
-                    question_progress = 0
+                generated_questions = []
+                question_progress = 0
 
-                    for section_index, section in enumerate(sections):
-                        # 使用する単語を決定
-                        target_keyword = None
-                        if target_keywords and len(used_keywords) < len(target_keywords):
-                            available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
-                            if available_keywords:
-                                target_keyword = available_keywords[0]
-                                used_keywords.add(target_keyword)
+                for section_index, section in enumerate(sections):
+                    # 使用する単語を決定
+                    target_keyword = None
+                    if target_keywords and len(used_keywords) < len(target_keywords):
+                        available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
+                        if available_keywords:
+                            target_keyword = available_keywords[0]
+                            used_keywords.add(target_keyword)
 
-                        # 質問のみ生成（これまでの質問を参照して重複防止）
-                        previous_questions_list = [q['question'] for q in generated_questions]
-                        # with profiler.profile_operation(f"question_generation_section_{section_index + 1}",
-                        #                                section_length=len(section),
-                        #                                previous_questions_count=len(previous_questions_list)):
-                        question = await self._generate_question_only_async(section, section_index, previous_questions_list, target_keyword)
+                    # 質問のみ生成（これまでの質問を参照して重複防止）
+                    previous_questions_list = [q['question'] for q in generated_questions]
+                    # with profiler.profile_operation(f"question_generation_section_{section_index + 1}",
+                    #                                section_length=len(section),
+                    #                                previous_questions_count=len(previous_questions_list)):
+                    question = await self._generate_question_only_async(section, section_index, previous_questions_list, target_keyword)
 
-                        if question:
-                            generated_questions.append({
-                                'question': question,
-                                'section': section,
-                                'section_index': section_index,
-                                'target_keyword': target_keyword
-                            })
+                    if question:
+                        generated_questions.append({
+                            'question': question,
+                            'section': section,
+                            'section_index': section_index,
+                            'target_keyword': target_keyword
+                        })
 
-                        question_progress += 1
+                    question_progress += 1
 
-                        # 進捗更新（質問生成フェーズ）
-                        progress_percent = start_percent + (end_percent - start_percent) * 0.3 * (question_progress / total_sections)
-                        overall_progress.progress(int(progress_percent))
-                        overall_status.text(f"💭 質問生成: {question_progress}/{total_sections}")
-                        step_info.text(f"ステップ 3/4: 質問生成 ({question_progress}/{total_sections})")
+                    # 進捗更新（質問生成フェーズ）
+                    progress_percent = start_percent + (end_percent - start_percent) * 0.3 * (question_progress / total_sections)
+                    overall_progress.progress(int(progress_percent))
+                    overall_status.text(f"💭 質問生成: {question_progress}/{total_sections}")
+                    step_info.text(f"ステップ 3/4: 質問生成 ({question_progress}/{total_sections})")
 
                 # === ステップ2: 全質問に対して並列回答生成 ===
                 overall_status.text(f"💬 ステップ2: {len(generated_questions)}個の質問に並列回答中...")
@@ -1554,17 +1554,17 @@ class QAApp:
                 # with profiler.profile_operation("answer_generation_phase",
                 #                                question_count=len(generated_questions),
                 #                                enable_followup=enable_followup):
-                    # 並列回答タスクを作成
-                    answer_tasks = []
-                    for q_data in generated_questions:
-                        task = self._generate_answer_with_followup_only_async(
-                            q_data['question'], q_data['section'], q_data['section_index'],
-                            enable_followup, followup_threshold, max_followups, semaphore
-                        )
-                        answer_tasks.append(task)
+                # 並列回答タスクを作成
+                answer_tasks = []
+                for q_data in generated_questions:
+                    task = self._generate_answer_with_followup_only_async(
+                        q_data['question'], q_data['section'], q_data['section_index'],
+                        enable_followup, followup_threshold, max_followups, semaphore
+                    )
+                    answer_tasks.append(task)
 
-                    # 並列実行
-                    answer_results = await asyncio.gather(*answer_tasks, return_exceptions=True)
+                # 並列実行
+                answer_results = await asyncio.gather(*answer_tasks, return_exceptions=True)
 
                 # 結果をまとめる
                 for i, result in enumerate(answer_results):
