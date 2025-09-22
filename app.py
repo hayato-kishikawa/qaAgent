@@ -13,6 +13,7 @@ from services.text_processor import TextProcessor
 from services.kernel_service import KernelService, AgentOrchestrator
 from services.chat_manager import ChatManager, StreamingCallback
 from services.session_manager import SessionManager
+from utils.profiler import profiler
 
 # エージェントのインポート
 from agents.student_agent import StudentAgent
@@ -446,6 +447,12 @@ class QAApp:
             SessionManager.unlock_settings()  # 設定ロックを解除
             SessionManager.set_step("completed")
 
+            # Q&Aローディング表示をクリア（セッション状態を使用）
+            if 'qa_result_placeholder' in st.session_state and st.session_state['qa_result_placeholder'] is not None:
+                with st.session_state['qa_result_placeholder'].container():
+                    st.success("🎉 全ての処理が完了しました！")
+                    st.info("下のタブで結果をご確認ください")
+
             # 完了後にタブを表示
             st.divider()
             self._render_results_step()
@@ -566,6 +573,12 @@ class QAApp:
             SessionManager.stop_processing()
             SessionManager.unlock_settings()  # 設定ロックを解除
             SessionManager.set_step("completed")
+
+            # Q&Aローディング表示をクリア（セッション状態を使用）
+            if 'qa_result_placeholder' in st.session_state and st.session_state['qa_result_placeholder'] is not None:
+                with st.session_state['qa_result_placeholder'].container():
+                    st.success("🎉 全ての処理が完了しました！")
+                    st.info("下のタブで結果をご確認ください")
 
             # 完了後にタブを表示
             st.divider()
@@ -1418,6 +1431,9 @@ class QAApp:
     async def _run_parallel_qa_only_with_progress(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any],
                                                   overall_progress, overall_status, step_info, start_percent: int, end_percent: int) -> list:
         """Q&Aセッションのみを並列実行（全体進捗に反映）"""
+        # プロファイリングセッション開始
+        profiler.start_session(f"QA_Session_{processing_settings.get('question_level', 'unknown')}")
+
         try:
             # 設定を取得
             qa_turns = processing_settings['qa_turns']
@@ -1443,15 +1459,20 @@ class QAApp:
             used_keywords = set()
 
             # 文書をセクションに分割
-            sections = self._split_document(pdf_data['text_content'], qa_turns)
-            self.student_agent.set_document_sections(sections)
-            self.teacher_agent.set_document_content(pdf_data['text_content'])
+            with profiler.profile_operation("document_splitting",
+                                           content_length=len(pdf_data['text_content']),
+                                           target_sections=qa_turns):
+                sections = self._split_document(pdf_data['text_content'], qa_turns)
+                self.student_agent.set_document_sections(sections)
+                self.teacher_agent.set_document_content(pdf_data['text_content'])
 
             # リアルタイム結果表示用のコンテナ
             results_container = st.container()
             with results_container:
                 st.subheader("💬 Q&A結果")
                 result_placeholder = st.empty()
+                # セッション状態に保存（他の場所からアクセスできるように）
+                st.session_state['qa_result_placeholder'] = result_placeholder
 
                 # 初期ローディング表示
                 with result_placeholder.container():
@@ -1503,77 +1524,307 @@ class QAApp:
             # 同時接続数を制限するセマフォ（OpenAI API制限に配慮）
             semaphore = asyncio.Semaphore(3)  # 最大3並列
 
-            # 全セクションのタスクを一度に作成
-            all_tasks = []
-            section_info = []
-
-            for section_index, section in enumerate(sections):
-                # 使用する単語を決定
-                target_keyword = None
-                if target_keywords and len(used_keywords) < len(target_keywords):
-                    available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
-                    if available_keywords:
-                        target_keyword = available_keywords[0]
-                        used_keywords.add(target_keyword)
-
-                task = self._process_section_async(section, section_index, [],
-                                                 enable_followup, followup_threshold, max_followups,
-                                                 target_keyword, semaphore)
-                all_tasks.append(task)
-                section_info.append({"section_index": section_index, "target_keyword": target_keyword})
-
-            # 順序を保持して処理
-            overall_status.text(f"💬 全{total_sections}セクションを並列処理中...")
+            # 2段階処理: 1)質問順次生成 → 2)回答並列生成
+            overall_status.text(f"💬 ステップ1: {total_sections}個の質問を順次生成中...")
 
             try:
-                # 順序を保持しながら並列実行
-                results = await asyncio.gather(*all_tasks, return_exceptions=True)
+                # === ステップ1: 質問を順次生成（重複防止） ===
+                with profiler.profile_operation("question_generation_phase",
+                                               total_sections=len(sections),
+                                               question_level=question_level):
+                    generated_questions = []
+                    question_progress = 0
 
-                for i, result in enumerate(results):
-                    completed_count += 1
+                    for section_index, section in enumerate(sections):
+                        # 使用する単語を決定
+                        target_keyword = None
+                        if target_keywords and len(used_keywords) < len(target_keywords):
+                            available_keywords = [kw for kw in target_keywords if kw not in used_keywords]
+                            if available_keywords:
+                                target_keyword = available_keywords[0]
+                                used_keywords.add(target_keyword)
 
+                        # 質問のみ生成（これまでの質問を参照して重複防止）
+                        previous_questions_list = [q['question'] for q in generated_questions]
+                        with profiler.profile_operation(f"question_generation_section_{section_index + 1}",
+                                                       section_length=len(section),
+                                                       previous_questions_count=len(previous_questions_list)):
+                            question = await self._generate_question_only_async(section, section_index, previous_questions_list, target_keyword)
+
+                        if question:
+                            generated_questions.append({
+                                'question': question,
+                                'section': section,
+                                'section_index': section_index,
+                                'target_keyword': target_keyword
+                            })
+
+                        question_progress += 1
+
+                        # 進捗更新（質問生成フェーズ）
+                        progress_percent = start_percent + (end_percent - start_percent) * 0.3 * (question_progress / total_sections)
+                        overall_progress.progress(int(progress_percent))
+                        overall_status.text(f"💭 質問生成: {question_progress}/{total_sections}")
+                        step_info.text(f"ステップ 3/4: 質問生成 ({question_progress}/{total_sections})")
+
+                # === ステップ2: 全質問に対して並列回答生成 ===
+                overall_status.text(f"💬 ステップ2: {len(generated_questions)}個の質問に並列回答中...")
+
+                with profiler.profile_operation("answer_generation_phase",
+                                               question_count=len(generated_questions),
+                                               enable_followup=enable_followup):
+                    # 並列回答タスクを作成
+                    answer_tasks = []
+                    for q_data in generated_questions:
+                        task = self._generate_answer_with_followup_only_async(
+                            q_data['question'], q_data['section'], q_data['section_index'],
+                            enable_followup, followup_threshold, max_followups, semaphore
+                        )
+                        answer_tasks.append(task)
+
+                    # 並列実行
+                    answer_results = await asyncio.gather(*answer_tasks, return_exceptions=True)
+
+                # 結果をまとめる
+                for i, result in enumerate(answer_results):
                     if isinstance(result, Exception):
-                        st.error(f"セクション{i+1}処理エラー: {str(result)}")
+                        st.error(f"回答生成エラー (質問{i+1}): {str(result)}")
+                        continue
                     elif result:
-                        qa_pairs.extend(result)
+                        qa_pairs.append(result)
 
                         # セッションにも追加
-                        for qa_pair in result:
-                            # メイン質問とフォローアップをセットで追加
-                            qa_data = {
-                                'question': qa_pair['question'],
-                                'answer': qa_pair['answer'],
-                                'followup_question': qa_pair.get('followup_question', ''),
-                                'followup_answer': qa_pair.get('followup_answer', '')
-                            }
-                            SessionManager.add_qa_pair_with_followup(qa_data)
+                        qa_data = {
+                            'question': result['question'],
+                            'answer': result['answer'],
+                            'followup_question': result.get('followup_question', ''),
+                            'followup_answer': result.get('followup_answer', '')
+                        }
+                        SessionManager.add_qa_pair_with_followup(qa_data)
 
-                        # バッチ更新（5セクションごとまたは最終セクション）
-                        if completed_count % 5 == 0 or completed_count == total_sections:
-                            with result_placeholder.container():
-                                st.info(f"✅ {len(qa_pairs)}個のQ&Aが完了しました （{completed_count}/{total_sections} セクション処理済み）")
+                    completed_count += 1
 
-                                # 処理中の場合のみシンプルな表示
-                                if completed_count < total_sections:
-                                    st.markdown("🔄 引き続きQ&Aを生成中...")
-
-                            # 全体進捗を更新
-                            progress_percent = start_percent + (end_percent - start_percent) * (completed_count / total_sections)
-                            overall_progress.progress(int(progress_percent))
-                            overall_status.text(f"💬 Q&A完了: {completed_count}/{total_sections} セクション")
-                            step_info.text(f"ステップ 3/4: Q&A生成 ({completed_count}/{total_sections})")
+                    # 進捗更新（回答生成フェーズ）
+                    progress_percent = start_percent + (end_percent - start_percent) * (0.3 + 0.7 * (completed_count / len(generated_questions)))
+                    overall_progress.progress(int(progress_percent))
+                    overall_status.text(f"💬 回答生成: {completed_count}/{len(generated_questions)}")
+                    step_info.text(f"ステップ 3/4: 回答生成 ({completed_count}/{len(generated_questions)})")
 
             except Exception as e:
-                st.error(f"並列処理エラー: {str(e)}")
+                st.error(f"2段階処理エラー: {str(e)}")
 
             # 完了
             overall_status.text(f"✅ Q&Aセッション完了！{len(qa_pairs)}ペア生成")
+
+            # ローディング表示をクリアして完了メッセージを表示
+            with result_placeholder.container():
+                st.success(f"✅ Q&Aセッション完了！{len(qa_pairs)}個のQ&Aペアが生成されました")
+                st.info("📊 最終レポートを準備中です...")
+
+            # プロファイリングセッション終了
+            profiler.end_session()
 
             return qa_pairs
 
         except Exception as e:
             st.error(f"Q&A並列処理エラー: {str(e)}")
+
+            # エラー時もローディング表示をクリア
+            with result_placeholder.container():
+                st.error("❌ Q&A生成中にエラーが発生しました")
+                st.write(f"エラー詳細: {str(e)}")
+
+            # エラー時もプロファイリングセッション終了
+            profiler.end_session()
             return []
+
+    async def _generate_sequential_qa_with_parallel_answers(self, section: str, section_index: int,
+                                                          enable_followup: bool, followup_threshold: float, max_followups: int,
+                                                          target_keyword: str = None, semaphore: asyncio.Semaphore = None,
+                                                          question_level: str = 'standard', question_num: int = 1,
+                                                          existing_qa_pairs: list = None) -> list:
+        """セクションから順次質問生成→並列回答処理（重複防止機能付き）"""
+        async with semaphore if semaphore else asyncio.Lock():
+            try:
+                # 重複防止用の過去質問リストを作成
+                previous_questions = []
+                if existing_qa_pairs:
+                    for qa in existing_qa_pairs:
+                        if qa.get('question'):
+                            previous_questions.append(qa['question'])
+
+                # 順次処理で質問を生成（重複防止）
+                questions = await self._generate_bulk_questions_with_deduplication(
+                    section, question_level, question_num, previous_questions
+                )
+
+                if not questions:
+                    return []
+
+                # 質問リストを分割
+                question_list = [q.strip() for q in questions.split('\n') if q.strip()]
+
+                # 各質問に対して並列で回答とフォローアップを生成
+                qa_tasks = []
+                for question in question_list[:question_num]:  # 指定数までの質問を処理
+                    task = self._process_single_question_async_new(question, section, section_index,
+                                                             enable_followup, followup_threshold, max_followups)
+                    qa_tasks.append(task)
+
+                # 並列実行
+                qa_results = await asyncio.gather(*qa_tasks, return_exceptions=True)
+
+                # 結果をまとめる
+                section_qa_pairs = []
+                for result in qa_results:
+                    if not isinstance(result, Exception) and result:
+                        section_qa_pairs.append(result)
+
+                return section_qa_pairs
+
+            except Exception as e:
+                st.error(f"順次質問生成エラー (セクション{section_index+1}): {str(e)}")
+                return []
+
+    async def _generate_bulk_questions_with_deduplication(self, section: str, question_level: str,
+                                                        question_num: int, previous_questions: list) -> str:
+        """重複防止機能付き一括質問生成"""
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
+
+        # 過去の質問をフォーマット
+        previous_questions_text = "\n".join([f"- {q}" for q in previous_questions]) if previous_questions else "まだ質問はありません"
+
+        # システムプロンプトを取得
+        system_prompt = prompt_loader.get_system_prompt("student", question_level)
+
+        # ユーザープロンプトにコンテキストを埋め込み
+        context = {
+            "question_num": str(question_num),
+            "previous_questions": previous_questions_text,
+            "section": section
+        }
+        user_prompt = prompt_loader.get_user_prompt("student", question_level, context)
+
+        # 完全なプロンプトを構築
+        full_prompt = f"{system_prompt}\n\n{user_prompt}\n\n文書セクション:\n{section}"
+
+        return await self.orchestrator.single_agent_invoke(
+            self.student_agent.get_agent(),
+            full_prompt
+        )
+
+    async def _process_single_question_async_new(self, question: str, section: str, section_index: int,
+                                               enable_followup: bool, followup_threshold: float, max_followups: int) -> dict:
+        """単一の質問を処理（回答＋フォローアップ）"""
+        try:
+            # 回答生成
+            answer = await self.orchestrator.single_agent_invoke(
+                self.teacher_agent.get_agent(),
+                f"質問: {question}\n\n文書セクション:\n{section}"
+            )
+
+            qa_pair = {
+                "question": question,
+                "answer": answer,
+                "section": f"セクション{section_index+1}",
+                "section_index": section_index
+            }
+
+            # フォローアップ質問生成（設定により）
+            if enable_followup:
+                try:
+                    followup_question = await self._generate_followup_question_async(answer)
+                    if followup_question and len(followup_question.strip()) > 10:
+                        followup_answer = await self._generate_followup_answer_async(followup_question, section)
+                        qa_pair["followup_question"] = followup_question
+                        qa_pair["followup_answer"] = followup_answer
+                except Exception as e:
+                    # フォローアップ生成失敗は警告程度に留める
+                    pass
+
+            return qa_pair
+
+        except Exception as e:
+            st.error(f"質問処理エラー: {str(e)}")
+            return None
+
+    @profiler.profile_async_function("generate_question_only")
+    async def _generate_question_only_async(self, section: str, section_index: int,
+                                           previous_questions: list, target_keyword: str = None) -> str:
+        """質問のみを生成（重複防止機能付き）"""
+        if not self.student_agent:
+            raise Exception("学生エージェントが初期化されていません")
+
+        # 過去の質問をフォーマット
+        previous_questions_text = "\n".join([f"- {q}" for q in previous_questions]) if previous_questions else "まだ質問はありません"
+
+        # prompt_loaderを使用して動的にユーザープロンプトを生成
+        from prompts.prompt_loader import PromptLoader
+        prompt_loader = PromptLoader()
+
+        # 学生エージェントのレベル設定を取得
+        question_level = getattr(self.student_agent, 'question_level', 'standard')
+
+        # ユーザープロンプトにコンテキストを埋め込み
+        context = {
+            "previous_questions": previous_questions_text,
+            "current_section_content": section,
+            "document_content": self.teacher_agent.document_content if self.teacher_agent else section
+        }
+
+        # 単語指定がある場合はコンテキストに追加
+        if target_keyword:
+            context["target_keyword"] = target_keyword
+
+        user_prompt = prompt_loader.get_user_prompt("student", question_level, context)
+        system_prompt = prompt_loader.get_system_prompt("student", question_level)
+
+        # 完全なプロンプトを構築
+        full_prompt = f"{system_prompt}\n\n{user_prompt}\n\n文書セクション:\n{section}"
+
+        return await self.orchestrator.single_agent_invoke(
+            self.student_agent.get_agent(),
+            full_prompt
+        )
+
+    @profiler.profile_async_function("generate_answer_with_followup")
+    async def _generate_answer_with_followup_only_async(self, question: str, section: str, section_index: int,
+                                                      enable_followup: bool, followup_threshold: float, max_followups: int,
+                                                      semaphore: asyncio.Semaphore = None) -> dict:
+        """質問に対する回答＋フォローアップを生成"""
+        async with semaphore if semaphore else asyncio.Lock():
+            try:
+                # 回答生成
+                answer = await self.orchestrator.single_agent_invoke(
+                    self.teacher_agent.get_agent(),
+                    f"質問: {question}\n\n文書セクション:\n{section}"
+                )
+
+                qa_pair = {
+                    "question": question,
+                    "answer": answer,
+                    "section": f"セクション{section_index+1}",
+                    "section_index": section_index
+                }
+
+                # フォローアップ質問生成（設定により）
+                if enable_followup:
+                    try:
+                        followup_question = await self._generate_followup_question_async(answer)
+                        if followup_question and len(followup_question.strip()) > 10:
+                            followup_answer = await self._generate_followup_answer_async(followup_question, section)
+                            qa_pair["followup_question"] = followup_question
+                            qa_pair["followup_answer"] = followup_answer
+                    except Exception as e:
+                        # フォローアップ生成失敗は警告程度に留める
+                        pass
+
+                return qa_pair
+
+            except Exception as e:
+                st.error(f"回答生成エラー: {str(e)}")
+                return None
 
 def main():
     """メイン実行関数"""
