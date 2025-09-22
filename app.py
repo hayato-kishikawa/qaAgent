@@ -13,7 +13,7 @@ from services.text_processor import TextProcessor
 from services.kernel_service import KernelService, AgentOrchestrator
 from services.chat_manager import ChatManager, StreamingCallback
 from services.session_manager import SessionManager
-from utils.profiler import profiler
+# from utils.profiler import profiler
 
 # エージェントのインポート
 from agents.student_agent import StudentAgent
@@ -1413,7 +1413,7 @@ class QAApp:
                                                   overall_progress, overall_status, step_info, start_percent: int, end_percent: int) -> list:
         """Q&Aセッションのみを並列実行（全体進捗に反映）"""
         # プロファイリングセッション開始
-        profiler.start_session(f"QA_Session_{processing_settings.get('question_level', 'unknown')}")
+        # profiler.start_session(f"QA_Session_{processing_settings.get('question_level', 'unknown')}")
 
         try:
             # 設定を取得
@@ -1440,10 +1440,10 @@ class QAApp:
             used_keywords = set()
 
             # 文書をセクションに分割
-            with profiler.profile_operation("document_splitting",
-                                           content_length=len(pdf_data['text_content']),
-                                           target_sections=qa_turns):
-                sections = self._split_document(pdf_data['text_content'], qa_turns)
+            # with profiler.profile_operation("document_splitting",
+            #                                content_length=len(pdf_data['text_content']),
+            #                                target_sections=qa_turns):
+            sections = self._split_document(pdf_data['text_content'], qa_turns)
                 self.student_agent.set_document_sections(sections)
                 self.teacher_agent.set_document_content(pdf_data['text_content'])
 
@@ -1510,9 +1510,9 @@ class QAApp:
 
             try:
                 # === ステップ1: 質問を順次生成（重複防止） ===
-                with profiler.profile_operation("question_generation_phase",
-                                               total_sections=len(sections),
-                                               question_level=question_level):
+                # with profiler.profile_operation("question_generation_phase",
+                #                                total_sections=len(sections),
+                #                                question_level=question_level):
                     generated_questions = []
                     question_progress = 0
 
@@ -1527,10 +1527,10 @@ class QAApp:
 
                         # 質問のみ生成（これまでの質問を参照して重複防止）
                         previous_questions_list = [q['question'] for q in generated_questions]
-                        with profiler.profile_operation(f"question_generation_section_{section_index + 1}",
-                                                       section_length=len(section),
-                                                       previous_questions_count=len(previous_questions_list)):
-                            question = await self._generate_question_only_async(section, section_index, previous_questions_list, target_keyword)
+                        # with profiler.profile_operation(f"question_generation_section_{section_index + 1}",
+                        #                                section_length=len(section),
+                        #                                previous_questions_count=len(previous_questions_list)):
+                        question = await self._generate_question_only_async(section, section_index, previous_questions_list, target_keyword)
 
                         if question:
                             generated_questions.append({
@@ -1551,9 +1551,9 @@ class QAApp:
                 # === ステップ2: 全質問に対して並列回答生成 ===
                 overall_status.text(f"💬 ステップ2: {len(generated_questions)}個の質問に並列回答中...")
 
-                with profiler.profile_operation("answer_generation_phase",
-                                               question_count=len(generated_questions),
-                                               enable_followup=enable_followup):
+                # with profiler.profile_operation("answer_generation_phase",
+                #                                question_count=len(generated_questions),
+                #                                enable_followup=enable_followup):
                     # 並列回答タスクを作成
                     answer_tasks = []
                     for q_data in generated_questions:
@@ -1603,7 +1603,7 @@ class QAApp:
                 st.info("📊 最終レポートを準備中です...")
 
             # プロファイリングセッション終了
-            profiler.end_session()
+            # profiler.end_session()
 
             return qa_pairs
 
@@ -1616,7 +1616,7 @@ class QAApp:
                 st.write(f"エラー詳細: {str(e)}")
 
             # エラー時もプロファイリングセッション終了
-            profiler.end_session()
+            # profiler.end_session()
             return []
 
     async def _generate_sequential_qa_with_parallel_answers(self, section: str, section_index: int,
@@ -1730,7 +1730,7 @@ class QAApp:
             st.error(f"質問処理エラー: {str(e)}")
             return None
 
-    @profiler.profile_async_function("generate_question_only")
+    # @profiler.profile_async_function("generate_question_only")
     async def _generate_question_only_async(self, section: str, section_index: int,
                                            previous_questions: list, target_keyword: str = None) -> str:
         """質問のみを生成（重複防止機能付き）"""
@@ -1769,7 +1769,7 @@ class QAApp:
             full_prompt
         )
 
-    @profiler.profile_async_function("generate_answer_with_followup")
+    # @profiler.profile_async_function("generate_answer_with_followup")
     async def _generate_answer_with_followup_only_async(self, question: str, section: str, section_index: int,
                                                       enable_followup: bool, followup_threshold: float, max_followups: int,
                                                       semaphore: asyncio.Semaphore = None) -> dict:
