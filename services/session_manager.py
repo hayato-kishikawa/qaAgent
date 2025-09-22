@@ -57,7 +57,7 @@ class SessionManager:
         return st.session_state.get('processing_settings', {
             'qa_turns': 10,
             'student_model': 'gpt-5-mini',
-            'teacher_model': 'gpt-5',
+            'teacher_model': 'gpt-5-mini',
             'summarizer_model': 'gpt-5-nano',
             'enable_followup': True,
             'followup_threshold': 0.3,  # 閾値を下げてフォローアップ頻度UP

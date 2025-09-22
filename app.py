@@ -304,7 +304,7 @@ class QAApp:
             processing_settings = {
                 'qa_turns': upload_result['qa_turns'],
                 'student_model': upload_result.get('student_model', 'gpt-5-mini'),
-                'teacher_model': upload_result.get('teacher_model', 'gpt-5'),
+                'teacher_model': upload_result.get('teacher_model', 'gpt-5-mini'),
                 'summarizer_model': upload_result.get('summarizer_model', 'gpt-5-nano'),
                 'enable_followup': upload_result['enable_followup'],
                 'followup_threshold': upload_result['followup_threshold'],
@@ -1400,32 +1400,13 @@ class QAApp:
             followup_question_prompt
         )
     
-    async def _generate_followup_answer_async(self, followup_question: str, section: str) -> str:
-        """フォローアップ回答を非同期生成"""
-        from prompts.prompt_loader import PromptLoader
-        prompt_loader = PromptLoader()
-
-        # teacherのfollowup_answer_promptセクションを取得
-        prompt_config = prompt_loader.load_prompt("teacher", "standard")
-        followup_answer_section = prompt_config.get('followup_answer_prompt', {})
-
-        if not followup_answer_section:
-            raise ValueError("followup_answer_promptセクションが見つかりません")
-
-        # followup_answer_promptセクションを構造化して構築
-        followup_prompt_parts = []
-        for key, value in followup_answer_section.items():
-            if key.startswith('prompt'):
-                followup_prompt_parts.append(value)
-            else:
-                followup_prompt_parts.append(value)
-
-        followup_prompt_template = "\n".join(followup_prompt_parts)
-        followup_answer_prompt = followup_prompt_template.replace("{followup_question}", followup_question).replace("{section}", section)
-
+    async def _generate_followup_answer_async(self, followup_question: str, section: str = None) -> str:
+        """フォローアップ回答を非同期生成（会話継続形式）"""
+        # このメソッドは後方互換性のために残すが、新しい実装では使用されない
+        # 会話継続形式では直接orchestratorを呼び出す
         return await self.orchestrator.single_agent_invoke(
             self.teacher_agent.get_agent(),
-            followup_answer_prompt
+            f"追加質問: {followup_question}"
         )
 
     async def _run_parallel_qa_only_with_progress(self, pdf_data: Dict[str, Any], processing_settings: Dict[str, Any],
@@ -1792,13 +1773,14 @@ class QAApp:
     async def _generate_answer_with_followup_only_async(self, question: str, section: str, section_index: int,
                                                       enable_followup: bool, followup_threshold: float, max_followups: int,
                                                       semaphore: asyncio.Semaphore = None) -> dict:
-        """質問に対する回答＋フォローアップを生成"""
+        """質問に対する回答＋フォローアップを会話形式で生成"""
         async with semaphore if semaphore else asyncio.Lock():
             try:
-                # 回答生成
+                # 初回回答生成 - セクション情報を含む
+                initial_prompt = f"質問: {question}\n\n文書セクション:\n{section}"
                 answer = await self.orchestrator.single_agent_invoke(
                     self.teacher_agent.get_agent(),
-                    f"質問: {question}\n\n文書セクション:\n{section}"
+                    initial_prompt
                 )
 
                 qa_pair = {
@@ -1813,7 +1795,17 @@ class QAApp:
                     try:
                         followup_question = await self._generate_followup_question_async(answer)
                         if followup_question and len(followup_question.strip()) > 10:
-                            followup_answer = await self._generate_followup_answer_async(followup_question, section)
+                            # 会話継続形式でフォローアップ回答を生成（セクション再送信なし）
+                            conversation_context = f"""前の会話:
+質問: {question}
+回答: {answer}
+
+追加質問: {followup_question}"""
+
+                            followup_answer = await self.orchestrator.single_agent_invoke(
+                                self.teacher_agent.get_agent(),
+                                conversation_context
+                            )
                             qa_pair["followup_question"] = followup_question
                             qa_pair["followup_answer"] = followup_answer
                     except Exception as e:
