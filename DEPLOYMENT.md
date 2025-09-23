@@ -130,3 +130,10 @@ qaAgent/
 2. GitHubにプッシュ
 3. Streamlit Community Cloudが自動的に再デプロイ
 4. デプロイメントログで成功を確認
+
+## 🧪 ローカル動作メモ（補足）
+
+- 仮想環境: `.venv` を使用
+  - 有効化: `source .venv/bin/activate`（Linux/Mac） / `.venv\\Scripts\\activate`（Windows）
+- 起動コマンド: `streamlit run app.py`
+- ポート: `.streamlit/config.toml` により `8502` 固定（`http://localhost:8502`）

@@ -24,12 +24,12 @@
 
 ```bash
 # 仮想環境の作成（既に作成済みの場合はスキップ）
-python -m venv venv
+python -m venv .venv
 
 # 仮想環境の有効化
-source venv/bin/activate  # Linux/Mac
+source .venv/bin/activate  # Linux/Mac
 # または
-venv\\Scripts\\activate    # Windows
+.venv\\Scripts\\activate    # Windows
 
 # 依存関係のインストール
 pip install -r requirements.txt
@@ -58,7 +58,7 @@ source .venv/bin/activate  # Linux/Mac
 streamlit run app.py
 ```
 
-ブラウザで `http://localhost:8502` にアクセスしてアプリを使用できます。
+ブラウザで `http://localhost:8502` にアクセスしてアプリを使用できます（`.streamlit/config.toml` でポート固定）。
 
 ### 4. 追加の依存関係
 
@@ -127,10 +127,10 @@ choco install visualstudio2022buildtools
 **4. Windowsでの仮想環境有効化**
 ```cmd
 # コマンドプロンプトの場合
-venv\Scripts\activate.bat
+.venv\Scripts\activate.bat
 
 # PowerShellの場合  
-venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 
 # PowerShellで実行ポリシーエラーが出る場合
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
