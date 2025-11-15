@@ -2,6 +2,17 @@
 
 このアプリは、PDFドキュメントをアップロードして、3つのAIエージェント（生徒、先生、要約）による要約とQ&Aセッションを通じて理解を深めるStreamlitアプリケーションです。
 
+## スクリーンショット
+
+### 初期画面
+![初期画面](screenshots/InitialScreen.png)
+
+### Q&Aセッション結果
+![Q&Aセッション結果](screenshots/Q&ASessionResults.png)
+
+### 最終レポート
+![最終レポート](screenshots/FinalReport.png)
+
 ## 機能
 
 - **PDFアップロード**: 最大50MBのPDFファイルに対応
