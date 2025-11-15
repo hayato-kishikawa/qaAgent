@@ -32,8 +32,19 @@ source .venv/bin/activate  # Linux/Mac
 .venv\\Scripts\\activate    # Windows
 
 # 依存関係のインストール
-pip install -r requirements.txt
+# ⚠️ 重要: Python 3.11以降では環境変数が必要です
+SETUPTOOLS_USE_DISTUTILS=stdlib pip install -r requirements.txt
+
+# Windowsの場合（PowerShell）
+$env:SETUPTOOLS_USE_DISTUTILS='stdlib'; pip install -r requirements.txt
+
+# Windowsの場合（コマンドプロンプト）
+set SETUPTOOLS_USE_DISTUTILS=stdlib && pip install -r requirements.txt
 ```
+
+**注意**:
+- Python 3.11以降では、`pybars4`と`PyMeta3`のビルドに環境変数 `SETUPTOOLS_USE_DISTUTILS=stdlib` が必要です
+- これらのパッケージは`semantic-kernel`の依存関係として必要です
 
 ### 2. 環境変数の設定
 
@@ -218,16 +229,29 @@ qaAgent/
 
 1. **APIキーエラー**: `.env`ファイルにOpenAI APIキーが正しく設定されているか確認
 2. **ファイルサイズエラー**: PDFファイルが50MB以下であることを確認
-3. **PDF画像抽出エラー**: 
+3. **依存関係インストールエラー（pybars4/PyMeta3のビルド失敗）**:
+   - Python 3.11以降で発生する場合、環境変数を設定してインストール:
+     ```bash
+     # Linux/Mac
+     SETUPTOOLS_USE_DISTUTILS=stdlib pip install -r requirements.txt
+
+     # Windows PowerShell
+     $env:SETUPTOOLS_USE_DISTUTILS='stdlib'; pip install -r requirements.txt
+
+     # Windows コマンドプロンプト
+     set SETUPTOOLS_USE_DISTUTILS=stdlib && pip install -r requirements.txt
+     ```
+   - エラーメッセージ: `AttributeError: install_layout. Did you mean: 'install_platlib'?` が表示される場合は上記の方法を使用
+4. **PDF画像抽出エラー**:
    - macOS: `brew install poppler`でpopplerをインストール
-   - Windows: 
+   - Windows:
      1. Visual C++ Redistributableをインストール
      2. Poppler for WindowsをインストールしてPATHを設定
      3. PowerShellを再起動してPATHを反映
-4. **プロンプト読み込みエラー**: `latest.ini`ファイルの内容を確認。v1形式でない場合は対応するバージョンファイルを作成
-5. **C++コンパイラエラー（Windows）**: Visual Studio Build Toolsをインストール
-6. **トークン超過**: 文書が長すぎる場合は自動分割されますが、それでも処理できない場合はより短い文書を使用
-7. **処理が遅い**: 大きなファイルや多いQ&A数の場合は処理時間が長くなります
+5. **プロンプト読み込みエラー**: `latest.ini`ファイルの内容を確認。v1形式でない場合は対応するバージョンファイルを作成
+6. **C++コンパイラエラー（Windows）**: Visual Studio Build Toolsをインストール
+7. **トークン超過**: 文書が長すぎる場合は自動分割されますが、それでも処理できない場合はより短い文書を使用
+8. **処理が遅い**: 大きなファイルや多いQ&A数の場合は処理時間が長くなります
 
 ### エラー対処法
 
