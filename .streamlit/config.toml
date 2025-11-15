@@ -1,19 +1,4 @@
 # Streamlit設定ファイル
 
-# テーマ設定 - ライトモード（デフォルト）
-[theme]
-base = "light"
-primaryColor = "#007bff"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f8f9fa"
-textColor = "#333333"
-font = "sans serif"
-
-# ダークモードを有効にする場合は、以下のようにbase = "dark"に変更してください
-# [theme]
-# base = "dark"
-# primaryColor = "#4299e1"
-# backgroundColor = "#0e1117"
-# secondaryBackgroundColor = "#262730"
-# textColor = "#fafafa"
-# font = "sans serif"
+# テーマ設定はOSの設定（ライト/ダークモード）に自動追従します
+# CSS変数（ui/styles.py）により、ブラウザのprefers-color-schemeに対応しています
