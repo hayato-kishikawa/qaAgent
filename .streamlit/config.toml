@@ -1,10 +1,5 @@
 # Streamlit設定ファイル
 
-# サーバー設定
-[server]
-port = 8502
-headless = true
-
 # テーマ設定 - ライトモード（デフォルト）
 [theme]
 base = "light"
